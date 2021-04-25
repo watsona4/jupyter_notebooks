@@ -1,18 +1,40 @@
 import pickle
 import getpass
 import logging
+import pyotp
+import os
 
 from datetime import datetime
 from time import sleep
 from random import SystemRandom
 
 import robin_stocks.robinhood as r
+import robin_stocks.robinhood.helper as rh
 
-logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO)
+from discord_handler import DiscordHandler
 
+# r.set_output(open(os.devnull, "w"))
+
+logger = logging.getLogger()
+
+handler = logging.FileHandler("crypto.log")
+formatter = logging.Formatter("%(asctime)s: %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
+handler = DiscordHandler(webhook_url, "crypto")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+logger.setLevel(logging.INFO)
 
 RAND = SystemRandom()
-SLEEP = 300
+SLEEP = 10
 
 with open("crypto_actions.pkl", "rb") as pklfile:
     ACTIONS = pickle.load(pklfile)
@@ -36,13 +58,13 @@ def etime(timestamp):
 
 
 def get_next_price():
-    sleep(SLEEP)
     quote = r.get_crypto_quote("BTC")
     return {
         "time": etime(datetime.now()),
         "mark": float(quote["mark_price"]),
         "ask": float(quote["ask_price"]),
         "bid": float(quote["bid_price"]),
+        "vol": float(quote["volume"]),
     }
 
 
@@ -55,7 +77,7 @@ def get_action(box):
         if rand < dist[0] + dist[1]:
             return "HOLD"
         return "SELL"
-    except IndexError:
+    except KeyError:
         return "HOLD"
 
 
@@ -67,12 +89,18 @@ def boxpp(diff):
     return 2
 
 
-def main():
-
+def login():
     username = "watsona4@gmail.com"
     password = getpass.getpass()
 
-    r.login(username, password)
+    totp = pyotp.TOTP("C3NG54ZC7JXQGSGR").now()
+
+    r.login(username, password, mfa_code=totp)
+
+
+def main():
+
+    login()
 
     mult = 150000 / SLEEP
 
@@ -80,12 +108,18 @@ def main():
 
     while True:
 
+        sleep(SLEEP)
+
+        for order in r.get_all_open_crypto_orders():
+            # logger.info("Cancelling order: %s", str(order))
+            r.cancel_crypto_order(order["id"])
+
         value = get_value()
         holdings = get_holdings()
 
         p1 = p0
         p0 = get_next_price()
-        logging.info(
+        logger.info(
             "mark=%.6f, ask=%.6f, bid=%.6f", p0["mark"], p0["ask"], p0["bid"]
         )
 
@@ -98,26 +132,26 @@ def main():
         pp1 = (p0["mark"] - p1["mark"]) / (p0["mark"] * dt)
 
         if pp1old is None:
-            logging.info("pp1=%.4f", pp1)
+            logger.info("pp1=%.4f", pp1)
             continue
 
         pp2old = pp2
         pp2 = (pp1 - pp1old) / (mult * dt)
 
         if pp2old is None:
-            logging.info("pp1=%.4f, pp2=%.4f", pp1, pp2)
+            logger.info("pp1=%.4f, pp2=%.4f", pp1, pp2)
             continue
 
         pp3old = pp3
         pp3 = (pp2 - pp2old) / (mult * dt)
 
         if pp3old is None:
-            logging.info("pp1=%.4f, pp2=%.4f, pp3=%.4f", pp1, pp2, pp3)
+            logger.info("pp1=%.4f, pp2=%.4f, pp3=%.4f", pp1, pp2, pp3)
             continue
 
         pp4 = (pp3 - pp3old) / (mult * dt)
 
-        logging.info(
+        logger.info(
             "pp1=%.4f, pp2=%.4f, pp3=%.4f, pp4=%.4f", pp1, pp2, pp3, pp4
         )
 
@@ -127,20 +161,29 @@ def main():
 
         action = get_action(box)
 
-        logging.info(
+        logger.info(
             "action=%4s, shares=%.6f, value=%.2f", action, holdings, value
         )
 
         if action == "BUY":
-            for _ in enumerate(10):
-                order = r.order_buy_crypto_by_price("BTC", value)
-                if "account_id" in order:
-                    break
-        elif action == "SELL":
-            if get_holdings() > 1e-6:
-                order = r.order_sell_crypto_by_quantity("BTC", holdings)
+            if value > 1:
+                #                while True:
+                order = r.order_buy_crypto_limit_by_price(
+                    "BTC",
+                    rh.round_price(0.95 * value),
+                    rh.round_price(p0["mark"]),
+                )
                 if "account_id" not in order:
-                    logging.info(str(order))
+                    logger.info(str(order))
+        elif action == "SELL":
+            if holdings > 1e-6:
+                order = r.order_sell_crypto_limit(
+                    "BTC",
+                    round(0.95 * holdings, 6),
+                    rh.round_price(p0["mark"]),
+                )
+                if "account_id" not in order:
+                    logger.info(str(order))
 
 
 if __name__ == "__main__":
