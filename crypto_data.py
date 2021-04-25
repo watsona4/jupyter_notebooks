@@ -26,11 +26,12 @@ def func(x):
         return 2  # sell
     return 1  # hold
 
+
 names = ["buy", "hold", "sell"]
 
 grid_search = True
 
-x = np.empty((0, 3), dtype=np.float64)
+x = np.empty((0, 2), dtype=np.float64)
 y = np.empty((0,), dtype=np.int64)
 
 for csvfile in glob.glob("btc_data_*.csv"):
@@ -54,11 +55,11 @@ for csvfile in glob.glob("btc_data_*.csv"):
         df["mark"].diff() / df["mark"] / df["time"].diff().dt.total_seconds()
     )
     df["pp2"] = df["pp1"].diff() / df["time"].diff().dt.total_seconds()
-    df["pp3"] = df["pp2"].diff() / df["time"].diff().dt.total_seconds()
+    # df["pp3"] = df["pp2"].diff() / df["time"].diff().dt.total_seconds()
     # df["pp4"] = df["pp3"].diff() / df["time"].diff().dt.total_seconds()
 
-    x = np.append(x, df[["pp1", "pp2", "pp3"]][3:].to_numpy(), axis=0)
-    y = np.append(y, df["action"][3:].to_numpy(), axis=0)
+    x = np.append(x, df[["pp1", "pp2"]][2:].to_numpy(), axis=0)
+    y = np.append(y, df["action"][2:].to_numpy(), axis=0)
 
 print(x.shape)
 
@@ -66,19 +67,22 @@ x_train, x_test, y_train, y_test = train_test_split(x, y)
 
 if grid_search:
 
-    solvers = ["adam"]  # , "adam"]
-    activations = ["logistic"] #, "tanh", "relu"]
-    alphas = [0.0001]
+    solvers = ["lbfgs", "adam"]
+    activations = ["logistic", "tanh", "relu"]
+    alphas = [0.0001, 0.1, 10]
     hiddens = [
         i * [int((x_train.shape[0] / 5) ** (1 / i))] for i in range(1, 4)
     ]
 
-    clf = make_pipeline(StandardScaler(), PCA(), MLPClassifier(max_iter=100000))
+    clf = make_pipeline(
+        StandardScaler(), PCA(), MLPClassifier(max_iter=100000)
+    )
 
     gsc = GridSearchCV(
         clf,
         {
-            "pca__n_components": [None, 1, 2, 3, 'mle'],
+            "pca__n_components": [None, 1, 2, 3, "mle"],
+            "pca__whiten": [True, False],
             "mlpclassifier__solver": solvers,
             "mlpclassifier__activation": activations,
             "mlpclassifier__alpha": alphas,
@@ -96,25 +100,25 @@ if grid_search:
 
     print(metrics.classification_report(y_true, y_pred, target_names=names))
 
-n_layers = 2
+# n_layers = 2
 
-npl = int((x_train.shape[0] / (8*5)) ** (1 / n_layers))
+# npl = int((x_train.shape[0] / (8*5)) ** (1 / n_layers))
 
-clf = make_pipeline(
-    StandardScaler(),
-    PCA(n_components=2),
-    MLPClassifier(
-        solver="lbfgs" if x_train.size < 5000 else "adam",
-        activation="logistic",
-        alpha=0.0001,
-        hidden_layer_sizes=n_layers * [npl],
-        max_iter=100000
-    ),
-)
+# clf = make_pipeline(
+#     StandardScaler(),
+#     PCA(n_components=2),
+#     MLPClassifier(
+#         solver="lbfgs" if x_train.size < 5000 else "adam",
+#         activation="logistic",
+#         alpha=0.0001,
+#         hidden_layer_sizes=n_layers * [npl],
+#         max_iter=100000
+#     ),
+# )
 
-print(clf.get_params())
-clf.fit(x_train, y_train)
+# print(clf.get_params())
+# clf.fit(x_train, y_train)
 
-y_true, y_pred = y_test, clf.predict(x_test)
+# y_true, y_pred = y_test, clf.predict(x_test)
 
-print(metrics.classification_report(y_true, y_pred, target_names=names))
+# print(metrics.classification_report(y_true, y_pred, target_names=names))
