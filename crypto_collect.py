@@ -12,9 +12,9 @@ while True:
         quote = get_next_price()
         logger.info(str(quote))
         df = df.append(quote, ignore_index=True)
-        sleep(60)
+        sleep(5)
     except KeyboardInterrupt:
-        df.to_csv(f"btc_data_{datetime.now():%Y%m%d-%H%M%S}.csv")
+        df.to_csv(f"btc_data_5sec_{datetime.now():%Y%m%d-%H%M%S}.csv")
         break
     except:
         continue
