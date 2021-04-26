@@ -1,17 +1,19 @@
 import pickle
 import getpass
 import logging
-import pyotp
 import os
 
 from datetime import datetime
 from time import sleep
 from random import SystemRandom
 
-import robin_stocks.robinhood as r
-import robin_stocks.robinhood.helper as rh
-
-from discord_handler import DiscordHandler
+try:
+    import pyotp
+    import robin_stocks.robinhood as r
+    import robin_stocks.robinhood.helper as rh
+    from discord_handler import DiscordHandler
+except ImportError:
+    pass
 
 # r.set_output(open(os.devnull, "w"))
 
@@ -26,10 +28,13 @@ handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
-handler = DiscordHandler(webhook_url, "crypto")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+try:
+    webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
+    handler = DiscordHandler(webhook_url, "crypto")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+except NameError:
+    pass
 
 logger.setLevel(logging.INFO)
 
