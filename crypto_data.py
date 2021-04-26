@@ -29,7 +29,7 @@ def func(x):
 
 names = ["buy", "hold", "sell"]
 
-grid_search = True
+grid_search = False
 
 x = np.empty((0, 2), dtype=np.float64)
 y = np.empty((0,), dtype=np.int64)
@@ -100,25 +100,25 @@ if grid_search:
 
     print(metrics.classification_report(y_true, y_pred, target_names=names))
 
-# n_layers = 2
+n_layers = 2
 
-# npl = int((x_train.shape[0] / (8*5)) ** (1 / n_layers))
+npl = int((x_train.shape[0] / 5) ** (1 / n_layers))
 
-# clf = make_pipeline(
-#     StandardScaler(),
-#     PCA(n_components=2),
-#     MLPClassifier(
-#         solver="lbfgs" if x_train.size < 5000 else "adam",
-#         activation="logistic",
-#         alpha=0.0001,
-#         hidden_layer_sizes=n_layers * [npl],
-#         max_iter=100000
-#     ),
-# )
+clf = make_pipeline(
+    StandardScaler(),
+    PCA(n_components=2),
+    MLPClassifier(
+        solver="adam",
+        activation="tanh",
+        alpha=0.0001,
+        hidden_layer_sizes=n_layers * [npl],
+        max_iter=100000
+    ),
+)
 
-# print(clf.get_params())
-# clf.fit(x_train, y_train)
+print(clf.get_params())
+clf.fit(x_train, y_train)
 
-# y_true, y_pred = y_test, clf.predict(x_test)
+y_true, y_pred = y_test, clf.predict(x_test)
 
-# print(metrics.classification_report(y_true, y_pred, target_names=names))
+print(metrics.classification_report(y_true, y_pred, target_names=names))
