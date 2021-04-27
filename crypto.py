@@ -15,7 +15,7 @@ try:
 except ImportError:
     pass
 
-# r.set_output(open(os.devnull, "w"))
+r.set_output(open(os.devnull, "w"))
 
 LOG_LEVEL = logging.INFO
 
@@ -124,13 +124,6 @@ def main():
 
     while True:
 
-        for order in r.get_all_open_crypto_orders():
-            # logger.info("Cancelling order: %s", str(order))
-            r.cancel_crypto_order(order["id"])
-
-        value = get_value()
-        holdings = get_holdings()
-
         p1 = p0
         while True:
             try:
@@ -160,27 +153,45 @@ def main():
 
         action = ["BUY", "HOLD", "SELL"][clf.predict([[pp1, pp2]])[0]]
 
-        logger.info(
-            "action=%4s, shares=%.6f, value=%.2f", action, holdings, value
-        )
+        for order in r.get_all_open_crypto_orders():
+            logger.info("Cancelling order: %s", str(order))
+            r.cancel_crypto_order(order["id"])
+
+        value = get_value()
+        holdings = get_holdings()
 
         quote = r.get_crypto_quote("BTC")
+
+        logger.info(
+            "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
+            action,
+            holdings,
+            value,
+            holdings * float(quote["mark_price"]) + value,
+        )
+
         if action == "BUY":
             if value > 1:
                 order = r.order_buy_crypto_limit_by_price(
                     "BTC",
-                    rh.round_price(0.95 * value),
-                    rh.round_price(1.005 * float(quote["mark_price"])),
+                    rh.round_price(value),
+                    rh.round_price(float(quote["mark_price"])),
                 )
+                # order = r.order_buy_crypto_by_price(
+                #     "BTC", rh.round_price(0.67 * value)
+                # )
                 if "account_id" not in order:
                     logger.info(str(order))
         elif action == "SELL":
             if holdings > 1e-6:
                 order = r.order_sell_crypto_limit(
                     "BTC",
-                    round(0.95 * holdings, 6),
-                    rh.round_price(0.995 * float(quote["mark_price"])),
+                    round(holdings, 6),
+                    rh.round_price(float(quote["mark_price"])),
                 )
+                # order = r.order_sell_crypto_by_quantity(
+                #     "BTC", round(0.67 * holdings, 6)
+                # )
                 if "account_id" not in order:
                     logger.info(str(order))
 
