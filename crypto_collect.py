@@ -10,7 +10,6 @@ while True:
 
     try:
         quote = get_next_price()
-        logger.info(str(quote))
         df = df.append(quote, ignore_index=True)
         sleep(5)
     except KeyboardInterrupt:

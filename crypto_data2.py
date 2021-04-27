@@ -31,24 +31,28 @@ def func(x):
 def mean(df, name):
     res = 0
     for i in range(1, df.shape[0]):
-        res += (df.iloc[i][name] + df.iloc[i-1][name]) * (df.iloc[i]["time"] - df.iloc[i-1]["time"]) / 2
-    return res / (df.iloc[4]["time"] - df.iloc[0]["time"])
+        res += (
+            (df.iloc[i][name] + df.iloc[i - 1][name])
+            * (df.iloc[i]["time"] - df.iloc[i - 1]["time"]).total_seconds()
+            / 2
+        )
+    return res / (df.iloc[11]["time"] - df.iloc[0]["time"]).total_seconds()
 
 
 names = ["buy", "hold", "sell"]
 
-grid_search = False
+grid_search = True
 
 x = np.empty((0, 2), dtype=np.float64)
 y = np.empty((0,), dtype=np.int64)
 
-for csvfile in glob.glob("btc_data_*.csv"):
+for csvfile in glob.glob("btc_data_5sec_*.csv"):
 
     print(f"Reading {csvfile}...")
 
     csvdf = pd.read_csv(csvfile, index_col=0)
 
-    if csvdf.shape[0] < 5:
+    if csvdf.shape[0] < 12:
         continue
 
     csvdf["time"] = csvdf.apply(timefunc, axis=1)
@@ -57,11 +61,19 @@ for csvfile in glob.glob("btc_data_*.csv"):
     csvdf["bid"] = pd.to_numeric(csvdf["bid"])
 
     df = pd.DataFrame(columns=["time", "mark", "ask", "bid"])
-    for i in range(0, csvdf.shape[0], 5):
-        take = csvdf.iloc[i:i+5]
-        if take.shape[0] < 5:
+    for i in range(0, csvdf.shape[0], 12):
+        take = csvdf.iloc[i : i + 12]
+        if take.shape[0] < 12:
             continue
-        df = df.append({"time": take.iloc[4]["time"], "mark": mean(take, "mark"), "ask": mean(take, "ask"), "bid": mean(take, "bid")}, ignore_index=True)
+        df = df.append(
+            {
+                "time": take.iloc[11]["time"],
+                "mark": mean(take, "mark"),
+                "ask": mean(take, "ask"),
+                "bid": mean(take, "bid"),
+            },
+            ignore_index=True,
+        )
 
     df["prev"] = df["mark"].shift(1)
     df["next"] = df["mark"].shift(-1)
@@ -103,6 +115,7 @@ if grid_search:
             "mlpclassifier__alpha": alphas,
             "mlpclassifier__hidden_layer_sizes": hiddens,
         },
+        n_jobs=4,
         verbose=3,
     )
 
@@ -122,7 +135,7 @@ clf = make_pipeline(
         activation="logistic",
         alpha=0.0001,
         hidden_layer_sizes=(3,),
-        max_iter=100000
+        max_iter=100000,
     ),
 )
 
@@ -133,5 +146,5 @@ y_true, y_pred = y_test, clf.predict(x_test)
 
 print(metrics.classification_report(y_true, y_pred, target_names=names))
 
-with open('mlpclassifier.pkl', 'wb') as pklfile:
+with open("mlpclassifier.pkl", "wb") as pklfile:
     pickle.dump(clf, pklfile)
