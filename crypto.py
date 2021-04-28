@@ -120,7 +120,7 @@ def main():
 
     login()
 
-    p0 = pp1 = pp2 = None
+    p0 = pp1 = pp2 = pp3 = None
 
     while True:
 
@@ -147,11 +147,17 @@ def main():
             logger.info("pp1=%.6g", pp1)
             continue
 
+        pp2old = pp2
         pp2 = (pp1 - pp1old) / dt
 
-        logger.info("pp1=%.6g, pp2=%.6g", pp1, pp2)
+        if pp2old is None:
+            logger.info("pp1=%.6g, pp2=%.6g", pp1, pp2)
+            continue
 
-        action = ["BUY", "HOLD", "SELL"][clf.predict([[pp1, pp2]])[0]]
+        pp3 = (pp2 - pp2old) / dt
+        logger.info("pp1=%.6g, pp2=%.6g, pp3=%.6g", pp1, pp2, pp3)
+
+        action = ["BUY", "HOLD", "SELL"][clf.predict([[pp1, pp2, pp3]])[0]]
 
         for order in r.get_all_open_crypto_orders():
             logger.info("Cancelling order: %s", str(order))
@@ -174,7 +180,7 @@ def main():
             if value > 1:
                 order = r.order_buy_crypto_limit_by_price(
                     "BTC",
-                    rh.round_price(value),
+                    rh.round_price(0.9 * value),
                     rh.round_price(float(quote["mark_price"])),
                 )
                 # order = r.order_buy_crypto_by_price(
@@ -186,7 +192,7 @@ def main():
             if holdings > 1e-6:
                 order = r.order_sell_crypto_limit(
                     "BTC",
-                    round(holdings, 6),
+                    round(0.9 * holdings, 6),
                     rh.round_price(float(quote["mark_price"])),
                 )
                 # order = r.order_sell_crypto_by_quantity(
