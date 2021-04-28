@@ -13,6 +13,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+import matplotlib.pyplot as plt
 
 def timefunc(x):
     return datetime(1900, 1, 1) + timedelta(days=x[0])
@@ -41,7 +42,7 @@ def mean(df, name):
 
 names = ["buy", "hold", "sell"]
 
-grid_search = True
+grid_search = False
 
 x = np.empty((0, 2), dtype=np.float64)
 y = np.empty((0,), dtype=np.int64)
@@ -92,31 +93,93 @@ for csvfile in glob.glob("btc_data_5sec_*.csv"):
 
 print(x.shape)
 
-solvers = ["lbfgs", "adam"]
-activations = ["identity", "logistic", "tanh", "relu"]
-alphas = [0.0001, 0.1, 10]
-hiddens = [(), (1,), (2,), (3,), (4,)]
+x_train, x_test, y_train, y_test = train_test_split(x, y)
+
+if grid_search:
+
+    solvers = ["lbfgs", "adam"]
+    activations = ["identity", "logistic", "tanh", "relu"]
+    alphas = [0.0001, 0.1, 10]
+    hiddens = [(), (1,), (2,), (3,), (4,)]
+
+    clf = make_pipeline(
+        StandardScaler(), PCA(), MLPClassifier(max_iter=100000)
+    )
+
+    gsc = GridSearchCV(
+        clf,
+        {
+            "pca__n_components": [None, 1, 2, 3, "mle"],
+            "pca__whiten": [True, False],
+            "mlpclassifier__solver": solvers,
+            "mlpclassifier__activation": activations,
+            "mlpclassifier__alpha": alphas,
+            "mlpclassifier__hidden_layer_sizes": hiddens,
+        },
+        n_jobs=4,
+        verbose=3,
+    )
+
+    gsc.fit(x_train, y_train)
+
+    print(gsc.best_params_)
+
+    y_true, y_pred = y_test, gsc.predict(x_test)
+
+    print(metrics.classification_report(y_true, y_pred, target_names=names))
 
 clf = make_pipeline(
-    StandardScaler(), PCA(), MLPClassifier(max_iter=100000)
+    StandardScaler(),
+    PCA(n_components=2),
+    # MLPClassifier(
+    #     solver="lbfgs",
+    #     activation="logistic",
+    #     alpha=0.0001,
+    #     hidden_layer_sizes=(3,),
+    #     max_iter=100000,
+    # ),
 )
 
-gsc = GridSearchCV(
-    clf,
-    {
-        "pca__n_components": [None, 1, 2, "mle"],
-        "mlpclassifier__solver": solvers,
-        "mlpclassifier__activation": activations,
-        "mlpclassifier__alpha": alphas,
-        "mlpclassifier__hidden_layer_sizes": hiddens,
-    },
-    n_jobs=4,
-    verbose=3,
-)
+x = clf.fit_transform(x)
 
-gsc.fit(x, y)
+b1 = []
+b2 = []
+s1 = []
+s2 = []
+h1 = []
+h2 = []
+for v, w in zip(x, y):
+    if w == 0:
+        b1.append(v[0])
+        b2.append(v[1])
+    elif w == 2:
+        s1.append(v[0])
+        s2.append(v[1])
+    else:
+        h1.append(v[0])
+        h2.append(v[1])
 
-print(gsc.best_params_)
+plt.rc("font", size=12)
+fig, ax = plt.subplots(figsize=(10, 6))
 
-with open("mlpclassifier.pkl", "wb") as pklfile:
-    pickle.dump(gsc, pklfile)
+ax.scatter(b1, b2, color="tab:green", label="Buy")
+ax.scatter(h1, h2, color="tab:blue", label="Hold")
+ax.scatter(s1, s2, color="tab:red", label="Sell")
+
+ax.set_xlabel("pp1")
+ax.set_ylabel("pp2")
+ax.set_title("Decision Matrix")
+ax.grid(True)
+ax.legend(loc="upper left")
+
+plt.show()
+
+# print(clf.get_params())
+# clf.fit(x, y)
+
+# y_true, y_pred = y_test, clf.predict(x_test)
+
+# print(metrics.classification_report(y_true, y_pred, target_names=names))
+
+# with open("mlpclassifier.pkl", "wb") as pklfile:
+#     pickle.dump(clf, pklfile)

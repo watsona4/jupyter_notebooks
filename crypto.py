@@ -12,10 +12,10 @@ try:
     import robin_stocks.robinhood as r
     import robin_stocks.robinhood.helper as rh
     from discord_handler import DiscordHandler
+
+    r.set_output(open(os.devnull, "w"))
 except ImportError:
     pass
-
-r.set_output(open(os.devnull, "w"))
 
 LOG_LEVEL = logging.INFO
 
