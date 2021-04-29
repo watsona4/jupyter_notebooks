@@ -206,7 +206,7 @@ def main():
                 action = "HOLD"
 
         logger.info(
-            "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
+            "action=%4s, shares=%.6f, value=%s, total=%s",
             action,
             holdings,
             locale.currency(value, grouping=True),
