@@ -92,19 +92,18 @@ for csvfile in glob.glob("btc_data_5sec_*.csv"):
 print(x.shape)
 
 n_components = [None, 1, 2, 3, "mle"]
-solvers = ["lbfgs", "adam"]
+solvers = ["lbfgs"]
 activations = ["identity", "logistic", "tanh", "relu"]
 alphas = [1e-5, 1e-3, 1e-1, 10, 1000]
 hiddens = [(), (1,), (2,), (3,), (4,), (5,)]
 
 clf = make_pipeline(
-    StandardScaler(), PCA(), MLPClassifier(max_iter=100000)
+    StandardScaler(), LinearDiscriminantAnalysis(), MLPClassifier(max_iter=100000)
 )
 
 gsc = GridSearchCV(
     clf,
     {
-        "pca__n_components": n_components,
         "mlpclassifier__solver": solvers,
         "mlpclassifier__activation": activations,
         "mlpclassifier__alpha": alphas,
