@@ -1,11 +1,10 @@
-import pickle
 import getpass
 import logging
 import os
-
+import pickle
 from datetime import datetime
-from time import sleep
 from random import SystemRandom
+from time import sleep
 
 try:
     import pyotp

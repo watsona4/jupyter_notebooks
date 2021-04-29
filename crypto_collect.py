@@ -2,6 +2,7 @@ import pandas as pd
 
 from crypto import *
 
+
 def save(df):
     df.to_csv(f"btc_data_5sec_{datetime.now():%Y%m%d-%H%M%S}.csv")
 

@@ -1,9 +1,9 @@
 import pickle
 from datetime import datetime, timedelta
 
-import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.dates import ConciseDateFormatter, AutoDateLocator
+import pandas as pd
+from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 
 from crypto import *
 

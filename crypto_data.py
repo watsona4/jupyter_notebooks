@@ -1,13 +1,11 @@
 import glob
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 from sklearn import metrics
 from sklearn.decomposition import PCA
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler

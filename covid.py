@@ -4,18 +4,17 @@
 # In[1]:
 
 
-from datetime import date, datetime, timedelta
-from itertools import cycle
 import os
-import requests
 import shutil
 import socket
 import tempfile
-
-import pandas as pd
-import numpy as np
+from datetime import date, datetime, timedelta
+from itertools import cycle
 
 import imageio
+import numpy as np
+import pandas as pd
+import requests
 from tqdm import tqdm
 
 PREFIX = 'C:\\Users\\watso' if socket.gethostname() == 'DESKTOP-VD3TK5G' else 'K:\\'
@@ -24,22 +23,22 @@ PREFIX = 'C:\\Users\\watso' if socket.gethostname() == 'DESKTOP-VD3TK5G' else 'K
 # In[2]:
 
 
-from bokeh.plotting import figure, curdoc
-
-from bokeh.io import export_png
-from bokeh.models import ColumnDataSource, CustomJS, Panel, Tabs, ColorBar, LinearColorMapper,     LogColorMapper, LogTicker, BasicTicker
-from bokeh.models.axes import LinearAxis, LogAxis
-from bokeh.models.widgets import CheckboxGroup, Dropdown, RadioGroup, MultiSelect, DatePicker, Button, Tabs, Panel
-from bokeh.events import MenuItemClick
-
-from bokeh.layouts import column, row
-from bokeh.palettes import viridis, Category20_20, linear_palette, Turbo256, Viridis256, Inferno256, Plasma256
-
-from bokeh.application.handlers import FunctionHandler
 from bokeh.application import Application
-
-from bokeh.sampledata.us_states import data as US_STATES
+from bokeh.application.handlers import FunctionHandler
+from bokeh.events import MenuItemClick
+from bokeh.io import export_png
+from bokeh.layouts import column, row
+from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource, CustomJS,
+                          LinearColorMapper, LogColorMapper, LogTicker, Panel,
+                          Tabs)
+from bokeh.models.axes import LinearAxis, LogAxis
+from bokeh.models.widgets import (Button, CheckboxGroup, DatePicker, Dropdown,
+                                  MultiSelect, Panel, RadioGroup, Tabs)
+from bokeh.palettes import (Category20_20, Inferno256, Plasma256, Turbo256,
+                            Viridis256, linear_palette, viridis)
+from bokeh.plotting import curdoc, figure
 from bokeh.sampledata.us_counties import data as US_COUNTIES
+from bokeh.sampledata.us_states import data as US_STATES
 
 if 'HI' in US_STATES: del US_STATES['HI']
 if 'AK' in US_STATES: del US_STATES['AK']
