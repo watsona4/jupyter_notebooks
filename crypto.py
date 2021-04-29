@@ -30,14 +30,14 @@ handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-if LOG_LEVEL >= logging.INFO:
-    try:
-        webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
-        handler = DiscordHandler(webhook_url, "crypto")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    except NameError:
-        pass
+# if LOG_LEVEL >= logging.INFO:
+#     try:
+#         webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
+#         handler = DiscordHandler(webhook_url, "crypto")
+#         handler.setFormatter(formatter)
+#         logger.addHandler(handler)
+#     except NameError:
+#         pass
 
 logger.setLevel(LOG_LEVEL)
 
@@ -120,6 +120,12 @@ def main():
 
     login()
 
+    last_price = None
+    last_prices = []
+
+    last_action = None
+    last_actions = []
+
     p0 = pp1 = pp2 = pp3 = None
 
     while True:
@@ -131,6 +137,7 @@ def main():
                 break
             except:
                 pass
+
         logger.info(
             "mark=%.6f, ask=%.6f, bid=%.6f", p0["mark"], p0["ask"], p0["bid"]
         )
@@ -162,11 +169,30 @@ def main():
         for order in r.get_all_open_crypto_orders():
             logger.info("Cancelling order: %s", str(order))
             r.cancel_crypto_order(order["id"])
+            if len(last_prices) == 2:
+                last_prices.pop()
+            last_price = last_prices[0]
+            if len(last_actions) == 2:
+                last_actions.pop()
+            last_action = last_actions[0]
 
         value = get_value()
         holdings = get_holdings()
 
         quote = r.get_crypto_quote("BTC")
+
+        price = rh.round_price(float(quote["mark_price"]))
+        if last_action is not None and last_price is not None:
+            if (
+                action == "BUY"
+                and last_action == "SELL"
+                and price > last_price
+            ) or (
+                action == "SELL"
+                and last_action == "BUY"
+                and price < last_price
+            ):
+                action = "HOLD"
 
         logger.info(
             "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
@@ -179,27 +205,27 @@ def main():
         if action == "BUY":
             if value > 1:
                 order = r.order_buy_crypto_limit_by_price(
-                    "BTC",
-                    rh.round_price(0.9 * value),
-                    rh.round_price(float(quote["mark_price"])),
+                    "BTC", rh.round_price(value), price
                 )
-                # order = r.order_buy_crypto_by_price(
-                #     "BTC", rh.round_price(0.67 * value)
-                # )
                 if "account_id" not in order:
                     logger.info(str(order))
+                else:
+                    last_prices.append(price)
+                    last_price = price
+                    last_actions.append("BUY")
+                    last_action = "BUY"
         elif action == "SELL":
             if holdings > 1e-6:
                 order = r.order_sell_crypto_limit(
-                    "BTC",
-                    round(0.9 * holdings, 6),
-                    rh.round_price(float(quote["mark_price"])),
+                    "BTC", round(holdings, 6), price
                 )
-                # order = r.order_sell_crypto_by_quantity(
-                #     "BTC", round(0.67 * holdings, 6)
-                # )
                 if "account_id" not in order:
                     logger.info(str(order))
+                else:
+                    last_prices.append(price)
+                    last_price = price
+                    last_actions.append("SELL")
+                    last_action = "SELL"
 
 
 if __name__ == "__main__":
