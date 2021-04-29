@@ -205,7 +205,7 @@ def main():
         if action == "BUY":
             if value > 1:
                 order = r.order_buy_crypto_limit_by_price(
-                    "BTC", rh.round_price(value), price
+                    "BTC", rh.round_price(0.99 * value), price
                 )
                 if "account_id" not in order:
                     logger.info(str(order))
@@ -217,7 +217,7 @@ def main():
         elif action == "SELL":
             if holdings > 1e-6:
                 order = r.order_sell_crypto_limit(
-                    "BTC", round(holdings, 6), price
+                    "BTC", round(0.99 * holdings, 6), price
                 )
                 if "account_id" not in order:
                     logger.info(str(order))
