@@ -1,4 +1,5 @@
 import getpass
+import locale
 import logging
 import os
 import pickle
@@ -15,6 +16,8 @@ try:
     r.set_output(open(os.devnull, "w"))
 except ImportError:
     pass
+
+locale.setlocale(locale.LC_ALL, "")
 
 LOG_LEVEL = logging.INFO
 
@@ -135,7 +138,11 @@ def main():
                 pass
 
         logger.info(
-            "mark=%.6f, ask=%.6f, bid=%.6f", p0["mark"], p0["ask"], p0["bid"]
+            "    current price=%s, trend=%s/min, last price=%s, last_action=%s",
+            locale.currency(p0["mark"]),
+            locale.currency(60 * p0["mark"] * pp1 if pp1 is not None else 0),
+            locale.currency(last_price or 0),
+            last_action or "None",
         )
 
         if p1 is None:
@@ -147,29 +154,31 @@ def main():
         pp1 = (p0["mark"] - p1["mark"]) / (p0["mark"] * dt)
 
         if pp1old is None:
-            logger.info("pp1=%.6g", pp1)
             continue
 
         pp2old = pp2
         pp2 = (pp1 - pp1old) / dt
 
         if pp2old is None:
-            logger.info("pp1=%.6g, pp2=%.6g", pp1, pp2)
             continue
 
         pp3 = (pp2 - pp2old) / dt
-        logger.info("pp1=%.6g, pp2=%.6g, pp3=%.6g", pp1, pp2, pp3)
 
         action = ["BUY", "HOLD", "SELL"][clf.predict([[pp1, pp2, pp3]])[0]]
 
-        for order in r.get_all_open_crypto_orders():
-            logger.info("Cancelling order: %s", str(order))
-            r.cancel_crypto_order(order["id"])
-            last_price = prev_last_price
-            last_action = prev_last_action
+        # for order in r.get_all_open_crypto_orders():
+        #     logger.info("Cancelling order: %s", str(order))
+        #     r.cancel_crypto_order(order["id"])
+        #     last_price = prev_last_price
+        #     last_action = prev_last_action
 
         value = get_value()
         holdings = get_holdings()
+
+        if (action == "BUY" and value < 1) or (
+            action == "SELL" and holdings < 1e-6
+        ):
+            action = "HOLD"
 
         quote = r.get_crypto_quote("BTC")
 
@@ -177,12 +186,10 @@ def main():
         if last_action is not None and last_price is not None:
             if (
                 action == "BUY"
-                and last_action == "SELL"
-                and price > last_price
+                and (last_action == "SELL" and price > last_price)
             ) or (
                 action == "SELL"
-                and last_action == "BUY"
-                and price < last_price
+                and (last_action == "BUY" and price < last_price)
             ):
                 action = "HOLD"
 
@@ -190,34 +197,32 @@ def main():
             "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
             action,
             holdings,
-            value,
-            holdings * float(quote["mark_price"]) + value,
+            locale.currency(value),
+            locale.currency(holdings * float(quote["mark_price"]) + value),
         )
 
         if action == "BUY":
-            if value > 1:
-                order = r.order_buy_crypto_limit_by_price(
-                    "BTC", rh.round_price(0.99 * value), price
-                )
-                if "account_id" not in order:
-                    logger.info(str(order))
-                else:
-                    prev_last_price = last_price
-                    last_price = price
-                    prev_last_action = last_action
-                    last_action = "BUY"
+            order = r.order_buy_crypto_by_price(
+                "BTC", rh.round_price(0.99 * value)
+            )
+            if "account_id" not in order:
+                logger.info(str(order))
+            else:
+                prev_last_price = last_price
+                last_price = price
+                prev_last_action = last_action
+                last_action = "BUY"
         elif action == "SELL":
-            if holdings > 1e-6:
-                order = r.order_sell_crypto_limit(
-                    "BTC", round(0.99 * holdings, 6), price
-                )
-                if "account_id" not in order:
-                    logger.info(str(order))
-                else:
-                    prev_last_price = last_price
-                    last_price = price
-                    prev_last_action = last_action
-                    last_action = "SELL"
+            order = r.order_sell_crypto_by_quantity(
+                "BTC", round(0.99 * holdings, 6)
+            )
+            if "account_id" not in order:
+                logger.info(str(order))
+            else:
+                prev_last_price = last_price
+                last_price = price
+                prev_last_action = last_action
+                last_action = "SELL"
 
 
 if __name__ == "__main__":
