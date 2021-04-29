@@ -137,21 +137,33 @@ def main():
             except:
                 pass
 
-        logger.info(
-            "    current price=%s, trend=%s/min, last price=%s, last_action=%s",
-            locale.currency(p0["mark"]),
-            locale.currency(60 * p0["mark"] * pp1 if pp1 is not None else 0),
-            locale.currency(last_price or 0),
-            last_action or "None",
-        )
-
         if p1 is None:
+            logger.info(
+                "    current price=%s, trend=%s/min, last price=%s, last_action=%s",
+                locale.currency(p0["mark"], grouping=True),
+                locale.currency(
+                    60 * p0["mark"] * pp1 if pp1 is not None else 0,
+                    grouping=True,
+                ),
+                locale.currency(last_price or 0, grouping=True),
+                last_action or "None",
+            )
             continue
 
         dt = (p0["time"] - p1["time"]).total_seconds()
 
         pp1old = pp1
         pp1 = (p0["mark"] - p1["mark"]) / (p0["mark"] * dt)
+
+        logger.info(
+            "    current price=%s, trend=%s/min, last price=%s, last_action=%s",
+            locale.currency(p0["mark"], grouping=True),
+            locale.currency(
+                60 * p0["mark"] * pp1 if pp1 is not None else 0, grouping=True
+            ),
+            locale.currency(last_price or 0, grouping=True),
+            last_action or "None",
+        )
 
         if pp1old is None:
             continue
@@ -197,8 +209,10 @@ def main():
             "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
             action,
             holdings,
-            locale.currency(value),
-            locale.currency(holdings * float(quote["mark_price"]) + value),
+            locale.currency(value, grouping=True),
+            locale.currency(
+                holdings * float(quote["mark_price"]) + value, grouping=True
+            ),
         )
 
         if action == "BUY":
