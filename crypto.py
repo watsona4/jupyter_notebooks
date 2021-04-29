@@ -120,11 +120,8 @@ def main():
 
     login()
 
-    last_price = None
-    last_prices = []
-
-    last_action = None
-    last_actions = []
+    prev_last_price = last_price = None
+    prev_last_action = last_action = None
 
     p0 = pp1 = pp2 = pp3 = None
 
@@ -169,12 +166,8 @@ def main():
         for order in r.get_all_open_crypto_orders():
             logger.info("Cancelling order: %s", str(order))
             r.cancel_crypto_order(order["id"])
-            if len(last_prices) == 2:
-                last_prices.pop()
-            last_price = last_prices[0]
-            if len(last_actions) == 2:
-                last_actions.pop()
-            last_action = last_actions[0]
+            last_price = prev_last_price
+            last_action = prev_last_action
 
         value = get_value()
         holdings = get_holdings()
@@ -210,9 +203,9 @@ def main():
                 if "account_id" not in order:
                     logger.info(str(order))
                 else:
-                    last_prices.append(price)
+                    prev_last_price = last_price
                     last_price = price
-                    last_actions.append("BUY")
+                    prev_last_action = last_action
                     last_action = "BUY"
         elif action == "SELL":
             if holdings > 1e-6:
@@ -222,9 +215,9 @@ def main():
                 if "account_id" not in order:
                     logger.info(str(order))
                 else:
-                    last_prices.append(price)
+                    prev_last_price = last_price
                     last_price = price
-                    last_actions.append("SELL")
+                    prev_last_action = last_action
                     last_action = "SELL"
 
 
