@@ -6,6 +6,7 @@ from crypto import *
 def save(df):
     df.to_csv(f"btc_data_5sec_{datetime.now():%Y%m%d-%H%M%S}.csv")
 
+
 login()
 
 df = pd.DataFrame(columns=["time", "mark", "ask", "bid", "vol"])
@@ -13,7 +14,7 @@ df = pd.DataFrame(columns=["time", "mark", "ask", "bid", "vol"])
 while True:
 
     try:
-        for i in range(17280):
+        for i in range(4260):
             q = r.get_crypto_quote("BTC")
             quote = {
                 "time": etime(datetime.now()),
