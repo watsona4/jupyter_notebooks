@@ -11,7 +11,6 @@ try:
     import pyotp
     import robin_stocks.robinhood as r
     import robin_stocks.robinhood.helper as rh
-    from discord_handler import DiscordHandler
 
     r.set_output(open(os.devnull, "w"))
 except ImportError:
@@ -31,15 +30,6 @@ logger.addHandler(handler)
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-
-# if LOG_LEVEL >= logging.INFO:
-#     try:
-#         webhook_url = "https://discord.com/api/webhooks/835509550881701898/ApE_MdvffnR6BX41L1T4l9iX9TZry4t3Fb6A97oMoWQu2Fin2ZXJaAGwKWGF6UNZthMj"
-#         handler = DiscordHandler(webhook_url, "crypto")
-#         handler.setFormatter(formatter)
-#         logger.addHandler(handler)
-#     except NameError:
-#         pass
 
 logger.setLevel(LOG_LEVEL)
 
@@ -122,8 +112,11 @@ def main():
 
     login()
 
-    prev_last_price = last_price = None
-    prev_last_action = last_action = None
+    if os.path.exists("state.pkl"):
+        with open("state.pkl", "rb") as statefile:
+            last_price, last_action = pickle.load(statefile)
+    else:
+        last_price = last_action = None
 
     p0 = pp1 = pp2 = pp3 = None
 
@@ -178,12 +171,6 @@ def main():
 
         action = ["BUY", "HOLD", "SELL"][clf.predict([[pp1, pp2, pp3]])[0]]
 
-        # for order in r.get_all_open_crypto_orders():
-        #     logger.info("Cancelling order: %s", str(order))
-        #     r.cancel_crypto_order(order["id"])
-        #     last_price = prev_last_price
-        #     last_action = prev_last_action
-
         value = get_value()
         holdings = get_holdings()
 
@@ -196,14 +183,14 @@ def main():
 
         price = rh.round_price(float(quote["mark_price"]))
         if last_action is not None and last_price is not None:
-            if (
-                action == "BUY"
-                and (last_action == "SELL" and price > last_price)
-            ) or (
-                action == "SELL"
-                and (last_action == "BUY" and price < last_price)
+            if action == "SELL" and (
+                last_action == "BUY" and price < 1.001 * last_price
             ):
                 action = "HOLD"
+            if action == "HOLD" and (
+                last_action == "BUY" and price < 0.97 * last_price
+            ):
+                action = "SELL"
 
         logger.info(
             "action=%4s, shares=%.6f, value=%s, total=%s",
@@ -216,27 +203,28 @@ def main():
         )
 
         if action == "BUY":
-            order = r.order_buy_crypto_by_price(
-                "BTC", rh.round_price(0.99 * value)
-            )
+            while True:
+                order = r.order_buy_crypto_by_price(
+                    "BTC", rh.round_price(value)
+                )
+                if "non_field_errors" not in order:
+                    break
             if "account_id" not in order:
                 logger.info(str(order))
             else:
-                prev_last_price = last_price
                 last_price = price
-                prev_last_action = last_action
                 last_action = "BUY"
         elif action == "SELL":
-            order = r.order_sell_crypto_by_quantity(
-                "BTC", round(0.99 * holdings, 6)
-            )
+            order = r.order_sell_crypto_by_quantity("BTC", round(holdings, 6))
             if "account_id" not in order:
                 logger.info(str(order))
             else:
-                prev_last_price = last_price
                 last_price = price
-                prev_last_action = last_action
                 last_action = "SELL"
+
+        if last_action is not None and last_price is not None:
+            with open("state.pkl", "wb") as statefile:
+                pickle.dump((last_price, last_action), statefile)
 
 
 if __name__ == "__main__":
