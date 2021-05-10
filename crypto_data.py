@@ -29,7 +29,7 @@ names = ["buy", "hold", "sell"]
 
 grid_search = False
 
-x = np.empty((0, 2), dtype=np.float64)
+x = np.empty((0, 4), dtype=np.float64)
 y = np.empty((0,), dtype=np.int64)
 
 for csvfile in glob.glob("btc_data_*.csv"):
@@ -53,11 +53,11 @@ for csvfile in glob.glob("btc_data_*.csv"):
         df["mark"].diff() / df["mark"] / df["time"].diff().dt.total_seconds()
     )
     df["pp2"] = df["pp1"].diff() / df["time"].diff().dt.total_seconds()
-    # df["pp3"] = df["pp2"].diff() / df["time"].diff().dt.total_seconds()
-    # df["pp4"] = df["pp3"].diff() / df["time"].diff().dt.total_seconds()
+    df["pp3"] = df["pp2"].diff() / df["time"].diff().dt.total_seconds()
+    df["pp4"] = df["pp3"].diff() / df["time"].diff().dt.total_seconds()
 
-    x = np.append(x, df[["pp1", "pp2"]][2:].to_numpy(), axis=0)
-    y = np.append(y, df["action"][2:].to_numpy(), axis=0)
+    x = np.append(x, df[["pp1", "pp2", "pp3", "pp4"]][4:].to_numpy(), axis=0)
+    y = np.append(y, df["action"][4:].to_numpy(), axis=0)
 
 print(x.shape)
 
