@@ -72,7 +72,7 @@ def round_price(price):
 with open("mlpclassifier.pkl", "rb") as pklfile:
     clf = pickle.load(pklfile)
 
-with open("test_data_5sec_20210428-123100.csv") as csvfile:
+with open("test_data_20210426-054749.csv") as csvfile:
 
     csvdf = pd.read_csv(csvfile, index_col=0)
 
@@ -80,6 +80,8 @@ with open("test_data_5sec_20210428-123100.csv") as csvfile:
     csvdf["mark"] = pd.to_numeric(csvdf["mark"])
     csvdf["ask"] = pd.to_numeric(csvdf["ask"])
     csvdf["bid"] = pd.to_numeric(csvdf["bid"])
+
+    csvdf = csvdf.reindex(index=csvdf.index[::-1])
 
     df = pd.DataFrame(columns=["time", "mark", "ask", "bid"])
     for i in range(0, csvdf.shape[0], 5):
@@ -157,12 +159,14 @@ while True:
 
     price = round_price(p0["mark"])
     if last_action is not None and last_price is not None:
-        if (
-            action == "BUY" and last_action == "SELL" and price > last_price
-        ) or (
-            action == "SELL" and last_action == "BUY" and price < last_price
+        if action == "SELL" and (
+            last_action == "BUY" and price < 1.001 * last_price
         ):
             action = "HOLD"
+        if action == "HOLD" and (
+            last_action == "BUY" and price < 0.99 * last_price
+        ):
+            action = "SELL"
 
     logger.info(
         "action=%4s, shares=%.6f, value=%.2f, total=%2f",

@@ -27,10 +27,10 @@ def mean(df, name):
     for i in range(1, df.shape[0]):
         res += (
             (df.iloc[i][name] + df.iloc[i - 1][name])
-            * (df.iloc[i]["time"] - df.iloc[i - 1]["time"])
+            * (df.iloc[i]["time"] - df.iloc[i - 1]["time"]).total_seconds()
             / 2
         )
-    return res / (df.iloc[4]["time"] - df.iloc[0]["time"])
+    return res / (df.iloc[4]["time"] - df.iloc[0]["time"]).total_seconds()
 
 
 VALUE = 100
@@ -100,6 +100,9 @@ x = []
 y = []
 z = []
 
+last_price = None
+last_action = None
+
 i = 0
 p = p0 = p1 = p2 = None
 
@@ -138,6 +141,11 @@ while True:
         action = "BUY"
     elif p0 > p1 and p0 > p3:
         action = "SELL"
+    if last_action is not None and last_price is not None:
+        if action == "SELL" and (
+            last_action == "BUY" and p0 < 1.001 * last_price
+        ):
+            action = "HOLD"
 
     logger.info(
         "action=%4s, shares=%.6f, value=%.2f, total=%.2f",
@@ -156,11 +164,15 @@ while True:
             buy(
                 0.9 * value, round_price(p0),
             )
+            last_price = p0
+            last_action = "BUY"
     elif action == "SELL":
         if holdings > 1e-6:
             sell(
                 0.9 * holdings, round_price(p0),
             )
+            last_price = p0
+            last_action = "SELL"
 
 plt.rc("font", size=12)
 fig, ax = plt.subplots(figsize=(10, 6))
