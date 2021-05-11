@@ -35,6 +35,18 @@ logger.addHandler(handler)
 logger.setLevel(LOG_LEVEL)
 
 
+def round_price(price):
+    price = float(price)
+    if price <= 1e-2:
+        returnPrice = round(price, 6)
+    elif price < 1e0:
+        returnPrice = round(price, 4)
+    else:
+        returnPrice = round(price, 2)
+
+    return returnPrice
+
+
 def timefunc(x):
     return datetime(1900, 1, 1) + timedelta(days=x[0])
 
@@ -102,11 +114,11 @@ def cancel_orders():
 def buy_limit(amount, ask):
     while True:
         order = r.order_buy_crypto_limit_by_price(
-            "BTC", rh.round_price(amount), rh.round_price(ask),
+            "BTC", round_price(amount), round_price(ask),
         )
         # order = r.order_buy_crypto_by_price(
         #     "BTC",
-        #     rh.round_price(value),
+        #     round_price(value),
         # )
         if "non_field_errors" not in order:
             break
@@ -115,7 +127,7 @@ def buy_limit(amount, ask):
 
 def sell_limit(quantity, bid):
     order = r.order_sell_crypto_limit(
-        "BTC", round(quantity, 6), rh.round_price(bid),
+        "BTC", round(quantity, 6), round_price(bid),
     )
     # order = r.order_sell_crypto_by_quantity(
     #     "BTC",
@@ -231,7 +243,7 @@ def main(
 
         quote = get_next_price()
 
-        price = rh.round_price(float(quote["mark"]))
+        price = round_price(float(quote["mark"]))
         ask = float(quote["ask"])
         bid = float(quote["bid"])
 

@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import axes3d
 import numpy as np
 from scipy import optimize
 import argparse
@@ -186,7 +187,7 @@ if __name__ == "__main__":
         df = df.append(csvdf, ignore_index=True)
 
     bounds_dict = {
-        "period": (12, 14400),
+        "period": (12, 2000),
         "bb_low": (0.25, 4),
         "bb_high": (0.25, 4),
         "lo_zone": (-0.1, 0.5),
@@ -219,22 +220,53 @@ if __name__ == "__main__":
 
         x0, fval, grid, Jout = optimize.brute(
             func=run,
-            Ns=1000,
+            Ns=20,
             args=tuple(fixed),
             ranges=bounds,
             full_output=True,
+            # finish=None,
         )
 
-        plt.plot(grid, -np.log(Jout))
-        plt.title(args.glob)
-        plt.show()
+        if len(grid.shape) == 2:
+            fig = plt.figure(figsize=(10,6))
+            ax1 = fig.add_subplot(111, projection='3d')
+
+            mycmap = plt.get_cmap('gist_earth')
+            surf1 = ax1.plot_surface(grid[0,:], grid[1,:], -np.log(Jout), cmap=mycmap)
+            fig.colorbar(surf1, ax=ax1, shrink=0.5, aspect=5)
+
+            plt.title(args.glob)
+            plt.show()
+
+        elif len(grid.shape) == 1:
+            plt.plot(grid, -np.log(Jout))
+            plt.title(args.glob)
+            plt.show()
+
 
     else:
-        res = getattr(optimize, args.method)(
+        # res = getattr(optimize, args.method)(
+        #     func=run,
+        #     args=tuple(fixed),
+        #     bounds=bounds,
+        #     local_search_options={"options": {"disp": True}},
+        # )
+        res = optimize.shgo(
             func=run,
             args=tuple(fixed),
             bounds=bounds,
-            local_search_options={"options": {"disp": True}},
+            constraints=[
+                {"type": "eq",
+                 "fun": lambda x: x[0] - int(x[0])},
+                {"type": "ineq",
+                 "fun": lambda x: x[1]},
+                {"type": "ineq",
+                 "fun": lambda x: x[2]},
+                {"type": "ineq",
+                 "fun": lambda x: x[5]},
+                {"type": "ineq",
+                 "fun": lambda x: x[6]},
+            ]
         )
 
         print(res)
