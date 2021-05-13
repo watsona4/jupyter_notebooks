@@ -15,7 +15,7 @@ from crypto_bb import timefunc
 VALUE = 100
 HOLDINGS = 0
 
-i = 0
+ITER = None
 
 
 def get_holdings():
@@ -33,15 +33,16 @@ crypto_bb.get_value = get_value
 
 
 def get_next_price():
-    global i
-    quote = df.iloc[i]
-    i += 1
+    try:
+        quote = next(ITER)
+    except StopIteration:
+        raise IndexError
     return {
-        "time": quote["time"],
-        "mark": quote["mark"],
-        "ask": quote["ask"],
-        "bid": quote["bid"],
-        "vol": 0,
+        "time": quote.time,
+        "mark": quote.mark,
+        "ask": quote.ask,
+        "bid": quote.bid,
+        "vol": quote.vol,
     }
 
 
@@ -77,11 +78,11 @@ crypto_bb.sell_limit = sell_limit
 
 def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
 
-    global HOLDINGS, VALUE, i
+    global HOLDINGS, VALUE, ITER
 
     VALUE = 100
     HOLDINGS = 0
-    i = 0
+    ITER = df.itertuples()
 
     crypto_bb.logger.setLevel(logging.ERROR)
 
@@ -187,7 +188,7 @@ if __name__ == "__main__":
         df = df.append(csvdf, ignore_index=True)
 
     bounds_dict = {
-        "period": (12, 2000),
+        "period": (12, 48*3600/5),
         "bb_low": (0.25, 4),
         "bb_high": (0.25, 4),
         "lo_zone": (-0.1, 0.5),
@@ -245,28 +246,11 @@ if __name__ == "__main__":
 
 
     else:
-        # res = getattr(optimize, args.method)(
-        #     func=run,
-        #     args=tuple(fixed),
-        #     bounds=bounds,
-        #     local_search_options={"options": {"disp": True}},
-        # )
-        res = optimize.shgo(
+        res = getattr(optimize, args.method)(
             func=run,
             args=tuple(fixed),
             bounds=bounds,
-            constraints=[
-                {"type": "eq",
-                 "fun": lambda x: x[0] - int(x[0])},
-                {"type": "ineq",
-                 "fun": lambda x: x[1]},
-                {"type": "ineq",
-                 "fun": lambda x: x[2]},
-                {"type": "ineq",
-                 "fun": lambda x: x[5]},
-                {"type": "ineq",
-                 "fun": lambda x: x[6]},
-            ]
+            local_search_options={"options": {"disp": True}},
         )
 
         print(res)
