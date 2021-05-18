@@ -146,7 +146,9 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
     return ret
 
 
-if __name__ == "__main__":
+def main():
+
+    global df
 
     parser = argparse.ArgumentParser()
 
@@ -221,14 +223,18 @@ if __name__ == "__main__":
 
         x0, fval, grid, Jout = optimize.brute(
             func=run,
-            Ns=20,
             args=tuple(fixed),
             ranges=bounds,
             full_output=True,
-            # finish=None,
+            finish=None,
         )
 
-        if len(grid.shape) == 2:
+        if grid.ndim == 1:
+            plt.plot(grid, -np.log(Jout))
+            plt.title(args.glob)
+            plt.show()
+
+        elif grid.ndim == 3:
             fig = plt.figure(figsize=(10,6))
             ax1 = fig.add_subplot(111, projection='3d')
 
@@ -239,17 +245,12 @@ if __name__ == "__main__":
             plt.title(args.glob)
             plt.show()
 
-        elif len(grid.shape) == 1:
-            plt.plot(grid, -np.log(Jout))
-            plt.title(args.glob)
-            plt.show()
-
-
     else:
         res = getattr(optimize, args.method)(
             func=run,
             args=tuple(fixed),
             bounds=bounds,
+            maxiter=1000000,
             local_search_options={"options": {"disp": True}},
         )
 
@@ -257,3 +258,7 @@ if __name__ == "__main__":
 
     print(f"Glob = {args.glob}")
     print(f"Default = {df.iloc[df.shape[0] - 1]['mark']/df.iloc[0]['mark']}")
+
+
+if __name__ == "__main__":
+    main()

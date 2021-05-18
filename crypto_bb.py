@@ -6,6 +6,7 @@ import pickle
 from datetime import datetime, timedelta
 from random import SystemRandom
 from time import sleep
+
 import numpy as np
 
 try:
@@ -150,13 +151,13 @@ def cur(x):
 
 
 def main(
-    period=1007,
-    bb_low=2.12,
-    bb_high=3.12,
-    lo_zone=0.1196,
-    hi_zone=0.8015,
-    lo_sigma=2.17,
-    hi_sigma=2.43,
+    period=5 * 3600 / 5,
+    bb_low=3.52,
+    bb_high=1.44,
+    lo_zone=-0.0436,
+    hi_zone=0.6444,
+    lo_sigma=0.97,
+    hi_sigma=2.23,
     protect_loss=True,
     stop_limit=False,
     no_login=False,
