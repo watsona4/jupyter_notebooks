@@ -268,7 +268,8 @@ def main():
                 {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
             ]
 
-        rel_diff = np.diff(bounds) / (10000 * np.mean(bounds))
+        abs_diff = np.diff(bounds) / 10000
+        rel_diff = abs_diff / np.mean(bounds)
 
         res = optimize.shgo(
             func=run,
@@ -277,7 +278,8 @@ def main():
             constraints=constraints,
             options={"disp": True},
             sampling_method="sobol",
-            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff}},
+            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff,
+                                          "eps": abs_diff}},
         )
 
         tbl = PrettyTable(
