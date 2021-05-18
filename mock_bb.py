@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from mpl_toolkits.mplot3d import axes3d
+from prettytable import PrettyTable
 from scipy import optimize
 from scipy.optimize import Bounds, NonlinearConstraint
 
@@ -275,6 +276,35 @@ def main():
             options={"disp": True},
             sampling_method="sobol",
         )
+
+        tbl = PrettyTable(
+            [
+                "Period",
+                "BB Low",
+                "BB High",
+                "Low Zone",
+                "High Zone",
+                "Low Sigma",
+                "High Sigma",
+                "Return",
+            ]
+        )
+        tbl.float_format = ".4"
+
+        for minim in res.xl:
+            row = []
+            i = 0
+            for val in fixed:
+                if val is None:
+                    row.append(minim[i])
+                    i += 1
+                else:
+                    row.append(val)
+            score = run(minim, *fixed)
+            row.append(-np.log(score))
+            tbl.add_row(row)
+
+        print(tbl)
 
     elif len(bounds) == 0:
         run([], *fixed)
