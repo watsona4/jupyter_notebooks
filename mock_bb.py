@@ -1,13 +1,15 @@
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import axes3d
-import numpy as np
-from scipy import optimize
 import argparse
 import glob
 import logging
 import sys
-import pandas as pd
 from datetime import datetime, timedelta
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from mpl_toolkits.mplot3d import axes3d
+from scipy import optimize
+from scipy.optimize import Bounds, NonlinearConstraint
 
 import crypto_bb
 from crypto_bb import timefunc
@@ -86,7 +88,11 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
 
     crypto_bb.logger.setLevel(logging.ERROR)
 
-    x = list(x)
+    try:
+        x = list(x)
+    except TypeError:
+        x = [x]
+
     args = {}
     for arg in [
         "period",
@@ -161,6 +167,7 @@ def main():
     parser.add_argument("--lo-sigma", type=float)
     parser.add_argument("--hi-sigma", type=float)
     parser.add_argument("--method", default="dual_annealing")
+    parser.add_argument("--finish", default=None)
 
     args = parser.parse_args()
 
@@ -190,7 +197,7 @@ def main():
         df = df.append(csvdf, ignore_index=True)
 
     bounds_dict = {
-        "period": (12, 48*3600/5),
+        "period": (12, 48 * 3600 / 5),
         "bb_low": (0.25, 4),
         "bb_high": (0.25, 4),
         "lo_zone": (-0.1, 0.5),
@@ -216,17 +223,15 @@ def main():
             fixed.append(None)
             bounds.append(bounds_dict[arg])
 
-    if len(bounds) == 0:
-        run([], *fixed)
-
-    elif args.method == "brute":
+    res = None
+    if args.method == "brute":
 
         x0, fval, grid, Jout = optimize.brute(
             func=run,
             args=tuple(fixed),
             ranges=bounds,
             full_output=True,
-            finish=None,
+            finish=args.finish,
         )
 
         if grid.ndim == 1:
@@ -235,15 +240,48 @@ def main():
             plt.show()
 
         elif grid.ndim == 3:
-            fig = plt.figure(figsize=(10,6))
-            ax1 = fig.add_subplot(111, projection='3d')
+            fig = plt.figure(figsize=(10, 6))
+            ax1 = fig.add_subplot(111, projection="3d")
 
-            mycmap = plt.get_cmap('gist_earth')
-            surf1 = ax1.plot_surface(grid[0,:], grid[1,:], -np.log(Jout), cmap=mycmap)
+            mycmap = plt.get_cmap("gist_earth")
+            surf1 = ax1.plot_surface(
+                grid[0, :], grid[1, :], -np.log(Jout), cmap=mycmap
+            )
             fig.colorbar(surf1, ax=ax1, shrink=0.5, aspect=5)
 
             plt.title(args.glob)
             plt.show()
+
+    elif args.method == "basinhopping":
+        res = optimize.basinhopping(
+            func=run,
+            x0=tuple(fixed),
+            minimizer_kwargs={"args": tuple(7 * [None])},
+        )
+
+    elif len(bounds) == 0:
+        run([], *fixed)
+
+    elif len(bounds) == 1:
+
+        x0 = [(bounds[0][0] + bounds[0][1]) / 2]
+        constraints = ()
+        options = {"disp": True}
+        if args.period is None:
+            constraints = [
+                {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
+            ]
+            options["finite_diff_rel_step"] = (1 / x0[0],)
+
+        res = optimize.minimize(
+            fun=run,
+            x0=x0,
+            method="trust-constr",
+            args=tuple(fixed),
+            bounds=Bounds(bounds[0][0], bounds[0][1]),
+            constraints=constraints,
+            options=options,
+        )
 
     else:
         res = getattr(optimize, args.method)(
@@ -254,6 +292,7 @@ def main():
             local_search_options={"options": {"disp": True}},
         )
 
+    if res is not None:
         print(res)
 
     print(f"Glob = {args.glob}")
