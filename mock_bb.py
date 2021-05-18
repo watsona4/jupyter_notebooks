@@ -259,6 +259,23 @@ def main():
             minimizer_kwargs={"args": tuple(7 * [None])},
         )
 
+    elif args.method == "shgo-sobol":
+
+        constraints = ()
+        if args.period is None:
+            constraints = [
+                {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
+            ]
+
+        res = optimize.shgo(
+            func=run,
+            args=tuple(fixed),
+            bounds=bounds,
+            constraints=constraints,
+            options={"disp": True},
+            sampling_method="sobol",
+        )
+
     elif len(bounds) == 0:
         run([], *fixed)
 
