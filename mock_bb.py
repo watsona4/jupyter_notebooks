@@ -207,8 +207,19 @@ def main():
         "hi_sigma": (0, 4),
     }
 
+    abs_dict = {
+        "period": 1,
+        "bb_low": 0.1,
+        "bb_high": 0.1,
+        "lo_zone": 0.01,
+        "hi_zone": 0.01,
+        "lo_sigma": 0.1,
+        "hi_sigma": 0.1,
+    }
+
     fixed = []
     bounds = []
+    abs_diff = []
     for arg in [
         "period",
         "bb_low",
@@ -223,6 +234,7 @@ def main():
         else:
             fixed.append(None)
             bounds.append(bounds_dict[arg])
+            abs_diff.append(abs_dict[arg])
 
     res = None
     if args.method == "brute":
@@ -268,9 +280,6 @@ def main():
                 {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
             ]
 
-        abs_diff = (np.diff(bounds) / 10000).flatten()
-        rel_diff = abs_diff / np.mean(bounds, axis=1)
-
         res = optimize.shgo(
             func=run,
             args=tuple(fixed),
@@ -278,8 +287,7 @@ def main():
             constraints=constraints,
             options={"disp": True},
             sampling_method="sobol",
-            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff,
-                                          "eps": abs_diff}},
+            minimizer_kwargs={"options": {"eps": np.array(abs_diff)}},
         )
 
         tbl = PrettyTable(
