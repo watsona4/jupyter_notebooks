@@ -278,7 +278,8 @@ def main():
             constraints=constraints,
             options={"disp": True},
             sampling_method="sobol",
-            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff}},
+            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff,
+                                          "eps": abs_diff}},
         )
 
         tbl = PrettyTable(
