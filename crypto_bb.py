@@ -151,13 +151,13 @@ def cur(x):
 
 
 def main(
-    period=5 * 3600 / 5,
-    bb_low=3.52,
-    bb_high=1.44,
-    lo_zone=-0.0436,
-    hi_zone=0.6444,
-    lo_sigma=0.97,
-    hi_sigma=2.23,
+    period=3520,
+    bb_low=3.3262,
+    bb_high=1.6270,
+    lo_zone=-0.07656,
+    hi_zone=0.9172,
+    lo_sigma=1.6562,
+    hi_sigma=1.2812,
     protect_loss=True,
     stop_limit=False,
     no_login=False,
