@@ -115,7 +115,7 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
         return f"{time:%Y-%m-%d %H:%M:%S},{ms:03d}"
 
     print(
-        f"{formatdate()}: period={args['period']:.2f}, bb_low={args['bb_low']:.2f}, bb_high={args['bb_high']:.2f}, lo_zone={args['lo_zone']:.4f}, hi_zone={args['hi_zone']:.4f}, lo_sigma={args['lo_sigma']:.2f}, hi_sigma={args['hi_sigma']:.2f}"
+        f"{formatdate()}: period={args['period']:15.8f}, bb_low={args['bb_low']:.8f}, bb_high={args['bb_high']:.8f}, lo_zone={args['lo_zone']: .8f}, hi_zone={args['hi_zone']:.8f}, lo_sigma={args['lo_sigma']:.8f}, hi_sigma={args['hi_sigma']:.8f}"
     )
 
     try:
@@ -268,8 +268,8 @@ def main():
                 {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
             ]
 
-        abs_diff = np.diff(bounds) / 10000
-        rel_diff = abs_diff / np.mean(bounds)
+        abs_diff = (np.diff(bounds) / 10000).flatten()
+        rel_diff = abs_diff / np.mean(bounds, axis=1)
 
         res = optimize.shgo(
             func=run,
@@ -278,8 +278,7 @@ def main():
             constraints=constraints,
             options={"disp": True},
             sampling_method="sobol",
-            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff,
-                                          "eps": abs_diff}},
+            minimizer_kwargs={"options": {"finite_diff_rel_step": rel_diff}},
         )
 
         tbl = PrettyTable(
