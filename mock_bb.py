@@ -8,6 +8,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from hyperopt import hp, fmin, tpe, space_eval
 from mpl_toolkits.mplot3d import axes3d
 from prettytable import PrettyTable
 from scipy import optimize
@@ -86,14 +87,14 @@ crypto_bb.sell_limit = sell_limit
 
 def run(
     x,
-    period,
-    bb_low,
-    bb_high,
-    lo_zone,
-    hi_zone,
-    lo_sigma,
-    hi_sigma,
-    protect_loss,
+    period=None,
+    bb_low=None,
+    bb_high=None,
+    lo_zone=None,
+    hi_zone=None,
+    lo_sigma=None,
+    hi_sigma=None,
+    protect_loss=None,
 ):
 
     global HOLDINGS, VALUE, ITER, I
@@ -398,6 +399,23 @@ def main():
         print()
 
         print(tbl)
+
+    elif args.method == "hyperopt":
+
+        space = [
+            hp.quniform("period", 12, 48 * 3600 / 5, 1),
+            hp.uniform("bb_low", 0.25, 4),
+            hp.uniform("bb_high", 0.25, 4),
+            hp.uniform("lo_zone", -0.1, 0.5),
+            hp.uniform("hi_zone", 0.5, 1.1),
+            hp.uniform("lo_sigma", 0, 4),
+            hp.uniform("hi_sigma", 0, 4),
+            hp.quniform("protect_loss", 0, 1, 1),
+        ]
+
+        res = fmin(run, space, algo=tpe.suggest, max_evals=200)
+
+        print(run(space_eval(space, res)))
 
     elif len(bounds) == 0:
         run([], *fixed)
