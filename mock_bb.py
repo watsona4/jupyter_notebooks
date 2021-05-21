@@ -84,7 +84,17 @@ def sell_limit(quantity, bid):
 crypto_bb.sell_limit = sell_limit
 
 
-def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
+def run(
+    x,
+    period,
+    bb_low,
+    bb_high,
+    lo_zone,
+    hi_zone,
+    lo_sigma,
+    hi_sigma,
+    protect_loss,
+):
 
     global HOLDINGS, VALUE, ITER, I
 
@@ -108,11 +118,20 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
         "hi_zone",
         "lo_sigma",
         "hi_sigma",
+        "protect_loss",
     ]:
         if locals()[arg] is None:
             args[arg] = x.pop(0)
         else:
             args[arg] = locals()[arg]
+
+    if isinstance(args["protect_loss"], (float, int)):
+        if args["protect_loss"] <= 0.5:
+            protect_loss = False
+        else:
+            protect_loss = True
+    else:
+        protect_loss = args["protect_loss"]
 
     try:
         crypto_bb.main(
@@ -126,7 +145,7 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
             no_login=True,
             no_sleep=True,
             save_last=False,
-            protect_loss=True,
+            protect_loss=protect_loss,
         )
     except IndexError:
         pass
@@ -152,6 +171,7 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
         args["hi_zone"],
         args["lo_sigma"],
         args["hi_sigma"],
+        protect_loss,
         result,
     ]
 
@@ -180,6 +200,7 @@ def main():
     parser.add_argument("--hi-zone", type=float)
     parser.add_argument("--lo-sigma", type=float)
     parser.add_argument("--hi-sigma", type=float)
+    parser.add_argument("--protect-loss", type=bool)
     parser.add_argument("--method", default="dual_annealing")
     parser.add_argument("--finish", default=None)
 
@@ -219,6 +240,7 @@ def main():
         "hi_zone": (0.5, 1.1),
         "lo_sigma": (0, 4),
         "hi_sigma": (0, 4),
+        "protect_loss": (0, 1),
     }
 
     abs_dict = {
@@ -229,6 +251,7 @@ def main():
         "hi_zone": 0.01,
         "lo_sigma": 0.1,
         "hi_sigma": 0.1,
+        "protect_loss": 0.25,
     }
 
     PTABLE = PrettyTable(
@@ -242,6 +265,7 @@ def main():
             "High Zone",
             "Low Sigma",
             "High Sigma",
+            "Protect",
             "Return",
         ]
     )
@@ -258,6 +282,7 @@ def main():
     bounds.append([float(v) for v in bounds_dict["hi_zone"]])
     bounds.append([float(v) for v in bounds_dict["lo_sigma"]])
     bounds.append([float(v) for v in bounds_dict["hi_sigma"]])
+    bounds.append((False, True))
     bounds.append((-99., 99.))
     for i in product([0, 1], repeat=len(bounds)):
         PTABLE.add_row([bounds[j][i[j]] for j in range(len(bounds))])
@@ -278,6 +303,7 @@ def main():
         "hi_zone",
         "lo_sigma",
         "hi_sigma",
+        "protect_loss",
     ]:
         if getattr(args, arg) is not None:
             fixed.append(getattr(args, arg))
@@ -349,6 +375,7 @@ def main():
                 "High Zone",
                 "Low Sigma",
                 "High Sigma",
+                "Protect",
                 "Return",
             ]
         )
