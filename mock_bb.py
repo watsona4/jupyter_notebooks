@@ -3,6 +3,7 @@ import glob
 import logging
 import sys
 from datetime import datetime, timedelta
+from itertools import product
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +20,10 @@ VALUE = 100
 HOLDINGS = 0
 
 ITER = None
+
+I = 0
+PTABLE = None
+OPTIONS = None
 
 
 def get_holdings():
@@ -81,11 +86,11 @@ crypto_bb.sell_limit = sell_limit
 
 def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
 
-    global HOLDINGS, VALUE, ITER
+    global HOLDINGS, VALUE, ITER, I
 
     VALUE = 100
     HOLDINGS = 0
-    ITER = df.itertuples()
+    ITER = DF.itertuples()
 
     crypto_bb.logger.setLevel(logging.ERROR)
 
@@ -109,15 +114,6 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
         else:
             args[arg] = locals()[arg]
 
-    def formatdate():
-        time = datetime.now()
-        ms = int(time.microsecond / 1000)
-        return f"{time:%Y-%m-%d %H:%M:%S},{ms:03d}"
-
-    print(
-        f"{formatdate()}: period={args['period']:15.8f}, bb_low={args['bb_low']:.8f}, bb_high={args['bb_high']:.8f}, lo_zone={args['lo_zone']: .8f}, hi_zone={args['hi_zone']:.8f}, lo_sigma={args['lo_sigma']:.8f}, hi_sigma={args['hi_sigma']:.8f}"
-    )
-
     try:
         crypto_bb.main(
             period=int(args["period"]),
@@ -136,26 +132,43 @@ def run(x, period, bb_low, bb_high, lo_zone, hi_zone, lo_sigma, hi_sigma):
         pass
 
     if HOLDINGS > 0:
-        sell_limit(HOLDINGS, df.iloc[df.shape[0] - 1]["bid"])
+        sell_limit(HOLDINGS, DF.iloc[DF.shape[0] - 1]["bid"])
 
     dt = (
-        df.iloc[df.shape[0] - 1]["time"] - df.iloc[0]["time"]
+        DF.iloc[DF.shape[0] - 1]["time"] - DF.iloc[0]["time"]
     ).total_seconds()
 
     result = (VALUE - 100) / dt * 3600 * 24
 
     ret = np.exp(-result)
 
-    print(
-        f"{formatdate()}:     Final value = {VALUE:.2f}, Return = {VALUE-100:.2f}% = {result:.2f}%/day, Score = {ret}"
-    )
+    row = [
+        I,
+        f"{datetime.now():%X}",
+        int(args["period"]),
+        args["bb_low"],
+        args["bb_high"],
+        args["lo_zone"],
+        args["hi_zone"],
+        args["lo_sigma"],
+        args["hi_sigma"],
+        result,
+    ]
+
+    PTABLE.add_row(row)
+    frows = PTABLE._format_rows(PTABLE._get_rows(OPTIONS), OPTIONS)
+    PTABLE._compute_widths(frows, OPTIONS)
+
+    print(PTABLE._stringify_row(frows[-1], OPTIONS))
+
+    I += 1
 
     return ret
 
 
 def main():
 
-    global df
+    global DF, PTABLE, OPTIONS
 
     parser = argparse.ArgumentParser()
 
@@ -172,7 +185,7 @@ def main():
 
     args = parser.parse_args()
 
-    df = pd.DataFrame(columns=["time", "mark", "ask", "bid"])
+    DF = pd.DataFrame(columns=["time", "mark", "ask", "bid"])
 
     for csvfile in glob.glob(args.glob):
 
@@ -183,9 +196,9 @@ def main():
         csvdf["ask"] = pd.to_numeric(csvdf["ask"])
         csvdf["bid"] = pd.to_numeric(csvdf["bid"])
 
-        if df.shape[0] > 0:
-            prev_time = df.iloc[df.shape[0] - 1]["time"]
-            prev_mark = df.iloc[df.shape[0] - 1]["mark"]
+        if DF.shape[0] > 0:
+            prev_time = DF.iloc[DF.shape[0] - 1]["time"]
+            prev_mark = DF.iloc[DF.shape[0] - 1]["mark"]
 
             dt = csvdf.iloc[0]["time"] - prev_time
             scale = csvdf.iloc[0]["mark"] - prev_mark
@@ -195,7 +208,8 @@ def main():
             csvdf["ask"] = csvdf["ask"] - scale
             csvdf["bid"] = csvdf["bid"] - scale
 
-        df = df.append(csvdf, ignore_index=True)
+        DF = DF.append(csvdf, ignore_index=True)
+
 
     bounds_dict = {
         "period": (12, 48 * 3600 / 5),
@@ -216,6 +230,42 @@ def main():
         "lo_sigma": 0.1,
         "hi_sigma": 0.1,
     }
+
+    PTABLE = PrettyTable(
+        [
+            "Iteration",
+            "Time",
+            "Period",
+            "BB Low",
+            "BB High",
+            "Low Zone",
+            "High Zone",
+            "Low Sigma",
+            "High Sigma",
+            "Return",
+        ]
+    )
+    PTABLE.float_format = ".4"
+
+    bounds = []
+    bounds.append((0, 100))
+    bounds.append((f"{datetime(2021, 1, 1, 0, 0, 0):%X}",
+                   f"{datetime(2021, 1, 1, 23, 59, 59):%X}"))
+    bounds.append([int(v) for v in bounds_dict["period"]])
+    bounds.append([float(v) for v in bounds_dict["bb_low"]])
+    bounds.append([float(v) for v in bounds_dict["bb_high"]])
+    bounds.append([float(v) for v in bounds_dict["lo_zone"]])
+    bounds.append([float(v) for v in bounds_dict["hi_zone"]])
+    bounds.append([float(v) for v in bounds_dict["lo_sigma"]])
+    bounds.append([float(v) for v in bounds_dict["hi_sigma"]])
+    bounds.append((-99., 99.))
+    for i in product([0, 1], repeat=len(bounds)):
+        PTABLE.add_row([bounds[j][i[j]] for j in range(len(bounds))])
+    OPTIONS = PTABLE._get_options({})
+    frows = PTABLE._format_rows(PTABLE._get_rows(OPTIONS), OPTIONS)
+    PTABLE._compute_widths(frows, OPTIONS)
+    PTABLE._hrule = PTABLE._stringify_hrule(OPTIONS)
+    print(PTABLE._stringify_header(OPTIONS))
 
     fixed = []
     bounds = []
@@ -317,6 +367,9 @@ def main():
             row.append(-np.log(score))
             tbl.add_row(row)
 
+        print(PTABLE._hrule)
+        print()
+
         print(tbl)
 
     elif len(bounds) == 0:
@@ -356,7 +409,7 @@ def main():
         print(res)
 
     print(f"Glob = {args.glob}")
-    print(f"Default = {df.iloc[df.shape[0] - 1]['mark']/df.iloc[0]['mark']}")
+    print(f"Default = {DF.iloc[DF.shape[0] - 1]['mark']/DF.iloc[0]['mark']}")
 
 
 if __name__ == "__main__":
