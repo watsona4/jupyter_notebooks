@@ -126,13 +126,9 @@ def run(
         else:
             args[arg] = locals()[arg]
 
-    if isinstance(args["protect_loss"], (float, int)):
-        if args["protect_loss"] <= 0.5:
-            protect_loss = False
-        else:
-            protect_loss = True
-    else:
-        protect_loss = args["protect_loss"]
+    protect_loss = args["protect_loss"]
+    if isinstance(protect_loss, (float, int)):
+        protect_loss = bool(int(protect_loss + 0.5))
 
     try:
         crypto_bb.main(
