@@ -8,7 +8,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from hyperopt import hp, fmin, tpe, space_eval
+from hyperopt import fmin, hp, space_eval, tpe
 from mpl_toolkits.mplot3d import axes3d
 from prettytable import PrettyTable
 from scipy import optimize
@@ -228,7 +228,6 @@ def main():
 
         DF = DF.append(csvdf, ignore_index=True)
 
-
     bounds_dict = {
         "period": (12, 48 * 3600 / 5),
         "bb_low": (0.25, 4),
@@ -248,7 +247,7 @@ def main():
         "hi_zone": 0.01,
         "lo_sigma": 0.1,
         "hi_sigma": 0.1,
-        "protect_loss": 0.25,
+        "protect_loss": 1,
     }
 
     PTABLE = PrettyTable(
@@ -270,8 +269,12 @@ def main():
 
     bounds = []
     bounds.append((0, 100))
-    bounds.append((f"{datetime(2021, 1, 1, 0, 0, 0):%X}",
-                   f"{datetime(2021, 1, 1, 23, 59, 59):%X}"))
+    bounds.append(
+        (
+            f"{datetime(2021, 1, 1, 0, 0, 0):%X}",
+            f"{datetime(2021, 1, 1, 23, 59, 59):%X}",
+        )
+    )
     bounds.append([int(v) for v in bounds_dict["period"]])
     bounds.append([float(v) for v in bounds_dict["bb_low"]])
     bounds.append([float(v) for v in bounds_dict["bb_high"]])
@@ -280,7 +283,7 @@ def main():
     bounds.append([float(v) for v in bounds_dict["lo_sigma"]])
     bounds.append([float(v) for v in bounds_dict["hi_sigma"]])
     bounds.append((False, True))
-    bounds.append((-99., 99.))
+    bounds.append((-99.0, 99.0))
     for i in product([0, 1], repeat=len(bounds)):
         PTABLE.add_row([bounds[j][i[j]] for j in range(len(bounds))])
     OPTIONS = PTABLE._get_options({})
@@ -347,11 +350,16 @@ def main():
 
     elif args.method == "shgo-sobol":
 
-        constraints = ()
+        constraints = []
         if args.period is None:
-            constraints = [
+            constraints.append(
                 {"type": "eq", "fun": lambda x: np.array([x[0] - int(x[0])])}
-            ]
+            )
+
+        if args.protect_loss is None:
+            constraints.append(
+                {"type": "eq", "fun": lambda x: np.array([x[7] - int(x[7])])}
+            )
 
         res = optimize.shgo(
             func=run,
