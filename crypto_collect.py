@@ -1,4 +1,4 @@
-import subprocess
+from subprocess import run
 
 import pandas as pd
 
@@ -7,9 +7,10 @@ from crypto import *
 def save(df):
     filename = f"btc_data_5sec_{datetime.now():%Y%m%d-%H%M%S}.csv"
     df.to_csv(filename)
-    subprocess.run(["git", "add", filename])
-    subprocess.run(["git", "commit", "-m", f"added {filename}"])
-    subprocess.run(["git", "push"])
+    run(["git", "pull", "--rebase"])
+    run(["git", "add", filename])
+    run(["git", "commit", "-m", f"added {filename}"])
+    run(["git", "push"])
 
 
 login()
