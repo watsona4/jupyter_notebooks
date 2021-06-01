@@ -61,21 +61,12 @@ def get_holdings():
 
 
 def get_value():
-    while True:
-        try:
-            profile = r.load_account_profile()
-            return float(profile["portfolio_cash"])
-        except Exception as e:
-            print(e)
+    profile = r.load_account_profile()
+    return float(profile["portfolio_cash"])
 
 
 def get_next_price():
-    while True:
-        try:
-            quote = r.get_crypto_quote("BTC")
-            break
-        except Exception as e:
-            print(e)
+    quote = r.get_crypto_quote("BTC")
     return {
         "time": datetime.now(),
         "mark": float(quote["mark_price"]),
@@ -97,32 +88,14 @@ def get_bb(x, p, low, high):
 
 
 def cancel_orders():
-    while True:
-        try:
-            for order in r.get_all_open_crypto_orders():
-                cancel = r.cancel_crypto_order(order["id"])
-                # if cancel:
-                #     last_price = prev_last_price
-                #     last_action = prev_last_action
-                #     if last_action is not None and last_price is not None:
-                #         with open("state.pkl", "wb") as statefile:
-                #             pickle.dump((last_price, last_action), statefile)
-            break
-        except Exception as e:
-            print(e)
+    for order in r.get_all_open_crypto_orders():
+        cancel = r.cancel_crypto_order(order["id"])
 
 
 def buy_limit(amount, ask):
-    while True:
-        order = r.order_buy_crypto_limit_by_price(
-            "BTC", round_price(amount), round_price(ask),
-        )
-        # order = r.order_buy_crypto_by_price(
-        #     "BTC",
-        #     round_price(value),
-        # )
-        if "non_field_errors" not in order:
-            break
+    order = r.order_buy_crypto_limit_by_price(
+        "BTC", round_price(amount), round_price(ask),
+    )
     return order
 
 
@@ -130,10 +103,6 @@ def sell_limit(quantity, bid):
     order = r.order_sell_crypto_limit(
         "BTC", round(quantity, 6), round_price(bid),
     )
-    # order = r.order_sell_crypto_by_quantity(
-    #     "BTC",
-    #     round(holdings, 6),
-    # )
     return order
 
 
@@ -180,119 +149,122 @@ def main(
 
     while True:
 
-        if not no_sleep:
-            sleep(5)
-        p = get_next_price()["mark"]
+        try:
+            if not no_sleep:
+                sleep(5)
+            p = get_next_price()["mark"]
 
-        bb_prices = np.append(bb_prices, p)
+            bb_prices = np.append(bb_prices, p)
 
-        if len(bb_prices) > period:
-            bb_prices = bb_prices[1:]
+            if len(bb_prices) > period:
+                bb_prices = bb_prices[1:]
 
-        bb_mean, pct_bb = get_bb(bb_prices, p, bb_low, bb_high)
-        logger.info(
-            "    current price=%s, mean=%s, %%bb=%.2f, last_price=%s, last_action=%s",
-            cur(p),
-            cur(bb_mean),
-            pct_bb,
-            cur(last_price or 0),
-            last_action or "None",
-        )
+            bb_mean, pct_bb = get_bb(bb_prices, p, bb_low, bb_high)
+            logger.info(
+                "    current price=%s, mean=%s, %%bb=%.2f, last_price=%s, last_action=%s",
+                cur(p),
+                cur(bb_mean),
+                pct_bb,
+                cur(last_price or 0),
+                last_action or "None",
+            )
 
-        if len(bb_prices) < period:
-            continue
+            if len(bb_prices) < period:
+                continue
 
-        cancel_orders()
+            cancel_orders()
 
-        value = get_value()
-        holdings = get_holdings()
+            value = get_value()
+            holdings = get_holdings()
 
-        if holdings < 1e-6:
-            if last_action == "BUY":
-                logger.info("BUY FAILED!")
-                last_price = prev_last_price
-            last_action = "SELL"
-        else:
-            if last_action == "SELL":
-                logger.info("SELL FAILED!")
-                last_price = prev_last_price
-            last_action = "BUY"
+            if holdings < 1e-6:
+                if last_action == "BUY":
+                    logger.info("BUY FAILED!")
+                    last_price = prev_last_price
+                last_action = "SELL"
+            else:
+                if last_action == "SELL":
+                    logger.info("SELL FAILED!")
+                    last_price = prev_last_price
+                last_action = "BUY"
 
-        if last_action != "BUY" and pct_bb < lo_zone:
-            pct_bbs = np.append(pct_bbs, pct_bb)
-        elif last_action != "SELL" and pct_bb > hi_zone:
-            pct_bbs = np.append(pct_bbs, pct_bb)
+            if last_action != "BUY" and pct_bb < lo_zone:
+                pct_bbs = np.append(pct_bbs, pct_bb)
+            elif last_action != "SELL" and pct_bb > hi_zone:
+                pct_bbs = np.append(pct_bbs, pct_bb)
 
-        action = "HOLD"
-        if last_action != "BUY" and len(pct_bbs) > 0:
-            target = pct_bbs.mean() + lo_sigma * pct_bbs.std()
-            logger.info("    BUY zone: target=%.2f", target)
-            if pct_bb > target:
-                action = "BUY"
-                pct_bbs = np.empty((0,))
-        if last_action != "SELL" and len(pct_bbs) > 0:
-            target = pct_bbs.mean() - hi_sigma * pct_bbs.std()
-            logger.info("    SELL zone: target=%.2f", target)
-            if pct_bb < target:
-                action = "SELL"
-                pct_bbs = np.empty((0,))
-
-        if (action == "BUY" and value < 1) or (
-            action == "SELL" and holdings < 1e-6
-        ):
             action = "HOLD"
+            if last_action != "BUY" and len(pct_bbs) > 0:
+                target = pct_bbs.mean() + lo_sigma * pct_bbs.std()
+                logger.info("    BUY zone: target=%.2f", target)
+                if pct_bb > target:
+                    action = "BUY"
+                    pct_bbs = np.empty((0,))
+            if last_action != "SELL" and len(pct_bbs) > 0:
+                target = pct_bbs.mean() - hi_sigma * pct_bbs.std()
+                logger.info("    SELL zone: target=%.2f", target)
+                if pct_bb < target:
+                    action = "SELL"
+                    pct_bbs = np.empty((0,))
 
-        quote = get_next_price()
-
-        price = round_price(float(quote["mark"]))
-        ask = float(quote["ask"])
-        bid = float(quote["bid"])
-
-        if last_action is not None and last_price is not None:
-            if (
-                protect_loss
-                and action == "SELL"
-                and (last_action == "BUY" and bid < last_price)
+            if (action == "BUY" and value < 1) or (
+                action == "SELL" and holdings < 1e-6
             ):
                 action = "HOLD"
-            if (
-                stop_limit
-                and action == "HOLD"
-                and (last_action == "BUY" and price < 0.99 * last_price)
-            ):
-                action = "SELL"
 
-        logger.info(
-            "action=%4s, shares=%.6f, value=%s, total=%s",
-            action,
-            holdings,
-            cur(value),
-            cur(holdings * float(quote["mark"]) + value),
-        )
+            quote = get_next_price()
 
-        if action == "BUY":
-            order = buy_limit(0.99 * value, ask)
-            if "account_id" not in order:
-                logger.info(str(order))
-            else:
-                prev_last_price = last_price
-                prev_last_action = last_action
-                last_price = ask
-                last_action = "BUY"
-        elif action == "SELL":
-            order = sell_limit(holdings, bid)
-            if "account_id" not in order:
-                logger.info(str(order))
-            else:
-                prev_last_price = last_price
-                prev_last_action = last_action
-                last_price = price
-                last_action = "SELL"
+            price = round_price(float(quote["mark"]))
+            ask = float(quote["ask"])
+            bid = float(quote["bid"])
 
-        if save_last and last_action is not None and last_price is not None:
-            with open("state.pkl", "wb") as statefile:
-                pickle.dump((last_price, last_action), statefile)
+            if last_action is not None and last_price is not None:
+                if (
+                    protect_loss
+                    and action == "SELL"
+                    and (last_action == "BUY" and bid < last_price)
+                ):
+                    action = "HOLD"
+                if (
+                    stop_limit
+                    and action == "HOLD"
+                    and (last_action == "BUY" and price < 0.99 * last_price)
+                ):
+                    action = "SELL"
 
+            logger.info(
+                "action=%4s, shares=%.6f, value=%s, total=%s",
+                action,
+                holdings,
+                cur(value),
+                cur(holdings * float(quote["mark"]) + value),
+            )
+
+            if action == "BUY":
+                order = buy_limit(0.99 * value, ask)
+                if "account_id" not in order:
+                    logger.info(str(order))
+                else:
+                    prev_last_price = last_price
+                    prev_last_action = last_action
+                    last_price = ask
+                    last_action = "BUY"
+            elif action == "SELL":
+                order = sell_limit(holdings, bid)
+                if "account_id" not in order:
+                    logger.info(str(order))
+                else:
+                    prev_last_price = last_price
+                    prev_last_action = last_action
+                    last_price = price
+                    last_action = "SELL"
+
+            if save_last and last_action is not None and last_price is not None:
+                with open("state.pkl", "wb") as statefile:
+                    pickle.dump((last_price, last_action), statefile)
+
+        except Exception as e:
+            print(e)
 
 if __name__ == "__main__":
     main()
