@@ -54,7 +54,18 @@ def timefunc(x):
 
 def get_holdings():
     positions = r.get_crypto_positions()
+    if positions is None:
+        print("positions is None")
     for pos in positions:
+        if pos is None:
+            print("pos is None")
+            print(positions)
+        if pos["currency"] is None:
+            print("currency is None")
+            print(pos)
+        if pos["quantity"] is None:
+            print("quantity is None")
+            print(pos)
         if pos["currency"]["code"] == "BTC":
             return float(pos["quantity"])
     return 0.0
@@ -62,11 +73,17 @@ def get_holdings():
 
 def get_value():
     profile = r.load_account_profile()
+    if profile is None:
+        print("profile is None")
     return float(profile["portfolio_cash"])
 
 
 def get_next_price():
     quote = r.get_crypto_quote("BTC")
+    if quote is None:
+        print("quote is None")
+        login()
+        quote = r.get_crypto_quote("BTC")
     return {
         "time": datetime.now(),
         "mark": float(quote["mark_price"]),
@@ -89,6 +106,9 @@ def get_bb(x, p, low, high):
 
 def cancel_orders():
     for order in r.get_all_open_crypto_orders():
+        if order is None:
+            print("order is None")
+            continue
         cancel = r.cancel_crypto_order(order["id"])
 
 
