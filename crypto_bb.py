@@ -107,12 +107,8 @@ def sell_limit(quantity, bid):
 
 
 def login():
-    username = "watsona4@gmail.com"
-    password = getpass.getpass()
-
     totp = pyotp.TOTP("C3NG54ZC7JXQGSGR").now()
-
-    r.login(username, password, mfa_code=totp)
+    r.login("watsona4@gmail.com", mfa_code=totp)
 
 
 def cur(x):
