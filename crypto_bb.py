@@ -3,6 +3,7 @@ import locale
 import logging
 import os
 import pickle
+import sys
 from datetime import datetime, timedelta
 from random import SystemRandom
 from time import sleep
@@ -54,19 +55,7 @@ def timefunc(x):
 
 def get_holdings():
     positions = r.get_crypto_positions()
-    print("get_holdings:", positions)
-    if positions is None:
-        print("positions is None")
     for pos in positions:
-        if pos is None:
-            print("pos is None")
-            print(positions)
-        if pos["currency"] is None:
-            print("currency is None")
-            print(pos)
-        if pos["quantity"] is None:
-            print("quantity is None")
-            print(pos)
         if pos["currency"]["code"] == "BTC":
             return float(pos["quantity"])
     return 0.0
@@ -74,30 +63,34 @@ def get_holdings():
 
 def get_value():
     profile = r.load_account_profile()
-    print("get_value:", profile)
-    if profile is None:
-        print("profile is None")
     return float(profile["portfolio_cash"])
 
 
 def get_next_price():
-    quote = r.get_crypto_quote("BTC")
-    print("get_next_price:", quote)
-    if quote is None:
-        print("quote is None")
-        login()
-        quote = r.get_crypto_quote("BTC")
-        print("get_next_price:", quote)
-    if quote is None:
-        print("quote is None")
-    return {
-        "time": datetime.now(),
-        "mark": float(quote["mark_price"]),
-        "ask": float(quote["ask_price"]),
-        "bid": float(quote["bid_price"]),
-        "vol": float(quote["volume"]),
-    }
-
+    quote = None
+    try:
+        try:
+            quote = r.get_crypto_quote("BTC")
+            if quote is None:
+                print("get_next_price():  No quote, trying login and again")
+                login()
+                quote = r.get_crypto_quote("BTC")
+        except Exception as exc:
+            print("get_next_price():  Exception:", exc)
+            print("get_next_price():  Trying login and again")
+            login()
+            quote = r.get_crypto_quote("BTC")
+        return {
+            "time": datetime.now(),
+            "mark": float(quote["mark_price"]),
+            "ask": float(quote["ask_price"]),
+            "bid": float(quote["bid_price"]),
+            "vol": float(quote["volume"]),
+        }
+    except Exception as exc:
+        print("get_next_price():", exc)
+        print("get_next_price():  quote =", quote)
+        sys.exit(2)
 
 def get_bb(x, p, low, high):
     bb_mean = x.mean()
@@ -112,9 +105,7 @@ def get_bb(x, p, low, high):
 
 def cancel_orders():
     for order in r.get_all_open_crypto_orders():
-        print("cancel_orders:", order)
         if order is None:
-            print("order is None")
             continue
         cancel = r.cancel_crypto_order(order["id"])
 
@@ -175,6 +166,7 @@ def main(
         try:
             if not no_sleep:
                 sleep(5)
+
             p = get_next_price()["mark"]
 
             bb_prices = np.append(bb_prices, p)
@@ -236,7 +228,7 @@ def main(
                 action = "HOLD"
 
             quote = get_next_price()
-
+            
             price = round_price(float(quote["mark"]))
             ask = float(quote["ask"])
             bid = float(quote["bid"])
@@ -287,7 +279,7 @@ def main(
                     pickle.dump((last_price, last_action), statefile)
 
         except Exception as e:
-            print(e)
+            print("main():", e)
 
 if __name__ == "__main__":
     main()
