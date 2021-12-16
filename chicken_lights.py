@@ -56,31 +56,13 @@ logging.info('Start time: %s', start_time)
  
 now = datetime.datetime.now(tz=tzlocal.get_localzone())
 logging.info('Time right now: %s', now)
-    
+
 delay = start_time - now - datetime.timedelta(minutes=30)
 logging.info('Sleep delay: %s', delay)
 
 if delay.total_seconds() < 0:
     sys.exit()
-
-# Get weather at sunrise
-
-# conn = http.client.HTTPSConnection("api-metoffice.apiconnect.ibmcloud.com")
-    
-# headers = {
-#     'x-ibm-client-id': "6f3f35d9219a8c4aab71f1d647a99017",
-#     'x-ibm-client-secret': "861d0518b5bd62dc4a57a9d270248c03",
-#     'accept': "application/json"
-# }
-
-# conn.request("GET",
-#              f"/metoffice/production/v0/forecasts/point/hourly?latitude={latitude}&longitude={longitude}",
-#              headers=headers)
-
-# weather = json.loads(conn.getresponse().read().decode("utf-8"))
-
-# code = weather['features'][0]['properties']['timeSeries'][0]['significantWeatherCode']
-    
+   
 # Set up transitions for fake sunrise, brightening, and sleep until real sunrise
 
 sleep_duration = sunrise - start_time
