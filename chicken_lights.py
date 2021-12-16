@@ -6,6 +6,7 @@ import sys
 import time
 import tzlocal
 
+from notify_run import Notify
 import suntimes
 import yeelight
 
@@ -87,9 +88,18 @@ time.sleep(delay.total_seconds())
 
 # Set up and run Flow (auto_on=True), turning off after transition
 
-bulbs = yeelight.discover_bulbs()
-
-bulb = yeelight.Bulb(bulbs[0]['ip'], auto_on=True)
+for _ in range(10):
+    try:
+        bulb = yeelight.Bulb(yeelight.discover_bulbs()[0]['ip'], auto_on=True)
+        break
+    except IndexError as e:
+        time.sleep(10)
+        continue
+else:
+    logging.info('Exception: %s', e)
+    Notify().send('Unable to find chicken light!')
+    sys.exit(1)
+    
 logging.info('Bulb found: %s', bulb)
 
 logging.info('Starting flow %s', flow)
