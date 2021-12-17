@@ -90,13 +90,13 @@ time.sleep(delay.total_seconds())
 
 for _ in range(10):
     try:
-        bulb = yeelight.Bulb(yeelight.discover_bulbs()[0]['ip'], auto_on=True)
+        bulb = yeelight.Bulb('192.168.1.13', auto_on=True)
         break
     except IndexError as e:
+        logging.info('Exception: %s', e)
         time.sleep(10)
         continue
 else:
-    logging.info('Exception: %s', e)
     Notify().send('Unable to find chicken light!')
     sys.exit(1)
     
