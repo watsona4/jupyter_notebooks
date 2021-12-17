@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 import time
+import traceback
 import tzlocal
 
 from notify_run import Notify
@@ -88,19 +89,12 @@ time.sleep(delay.total_seconds())
 
 # Set up and run Flow (auto_on=True), turning off after transition
 
-for _ in range(10):
-    try:
-        bulb = yeelight.Bulb('192.168.1.13', auto_on=True)
-        break
-    except IndexError as e:
-        logging.info('Exception: %s', e)
-        time.sleep(10)
-        continue
-else:
-    Notify().send('Unable to find chicken light!')
-    sys.exit(1)
-    
-logging.info('Bulb found: %s', bulb)
-
-logging.info('Starting flow %s', flow)
-bulb.start_flow(flow)
+try:
+    bulb = yeelight.Bulb('192.168.1.13', auto_on=True)
+    logging.info('Bulb found: %s', bulb)
+    logging.info('Starting flow %s', flow)
+    bulb.start_flow(flow)
+except Exception as exc:
+    exc_str = traceback.format_exception_only(*sys.exc_info()[:2])
+    Notify().send(''.join(exc_str))
+    raise
