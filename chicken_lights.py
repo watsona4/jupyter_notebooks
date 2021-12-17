@@ -63,6 +63,7 @@ delay = start_time - now - datetime.timedelta(minutes=30)
 logging.info('Sleep delay: %s', delay)
 
 if delay.total_seconds() < 0:
+    logging.info('Run in the past. Exiting.')
     sys.exit()
    
 # Set up transitions for fake sunrise, brightening, and sleep until real sunrise
