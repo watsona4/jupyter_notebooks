@@ -1,108 +1,186 @@
-import datetime
-import http.client
-import json
+from datetime import date, datetime, timedelta
 import logging
 import sys
 import time
-import traceback
-import tzlocal
 
-from notify_run import Notify
+import numpy as np
 import suntimes
+import tzlocal
 import yeelight
+from scipy.constants import c, h, k
 
-logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.INFO)
+from colour_system import CS_HDTV
 
-# The following steps are run every morning at 30 mins before sunrise:
-#   1. Get sunrise/sunset times for current date
-#   2. Compute start time and delay based on current date and time
-#   3. Get weather at sunrise
-#   4. Set up transitions for fake sunrise (30-min), brightening (1-hr), and sleep (til 1 hr after real sunrise)
-#   5. Sleep based on delay time
-#   6. Set up and run Flow (auto_on=True), turning off after transition
-    
-# Get sunrise/sunset times for current date
-    
-latitude = 43.09176073408273
-longitude = -73.49606500488254
-    
-today = datetime.datetime.today()
-logging.info('Today is %s', today)
+if __debug__:
 
-sun = suntimes.SunTimes(latitude=latitude, longitude=longitude, altitude=114)
-logging.info('Sun: %s', sun)
-    
-sunrise = sun.riselocal(today)
-sunset = sun.setlocal(today)
-midday = (sunrise + sunset) / 2
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
+    )
 
-logging.info('Sunrise today: %s', sunrise)
-logging.info('Sunset today: %s', sunset)
-logging.info('Midday today: %s', midday)
+    def set_rgb(self, r, g, b):
+        logging.debug("Setting color to (%3d, %3d, %3d)", r, g, b)
 
-# Compute start time and delay based on current date and time
-    
-long_day = sun.durationdelta(datetime.date(2021, 6, 21))
-short_day = sun.durationdelta(datetime.date(2021, 12, 21))
-    
-today_duration = sun.durationdelta(today)
-logging.info('Daylight duration today: %s', today_duration)
- 
-target_day = 2*(today_duration - short_day).total_seconds()/(long_day - short_day).total_seconds() + 14
-target_day = datetime.timedelta(hours=target_day)
-logging.info('Target duration: %s', target_day)
- 
-trans_delay = max(1 - (today - datetime.datetime(2021, 12, 8)) / datetime.timedelta(days=28), 0)
-logging.info('Transition delay: %s', trans_delay)
-  
-start_time = sunset - target_day + trans_delay * (target_day - today_duration)
-logging.info('Start time: %s', start_time)
+    yeelight.main.Bulb.set_rgb = set_rgb
 
-morning = midday - start_time - datetime.timedelta(minutes=60)
-afternoon = sunset - midday - datetime.timedelta(minutes=60)
-logging.info('Morning duration: %s', morning)
-logging.info('Afternoon duration: %s', afternoon)
- 
-now = datetime.datetime.now(tz=tzlocal.get_localzone())
-logging.info('Time right now: %s', now)
+    def set_brightness(self, b):
+        logging.debug("Setting brightness to %3d", b)
 
-delay = start_time - now - datetime.timedelta(minutes=30)
-logging.info('Sleep delay: %s', delay)
+    yeelight.main.Bulb.set_brightness = set_brightness
 
-if delay.total_seconds() < 0:
-    logging.info('Run in the past. Exiting.')
-    sys.exit()
-   
-# Set up transitions for fake sunrise, brightening, and sleep until real sunrise
+    def turn_off(self):
+        logging.debug("Turning off bulb")
 
-sleep_duration = sunrise - start_time
-logging.info('On time following sunrise: %s', sleep_duration)
+    yeelight.main.Bulb.turn_off = turn_off
 
-transitions = [
-    yeelight.TemperatureTransition(degrees=2000, duration=50, brightness=0),  # initialize
-    yeelight.TemperatureTransition(degrees=3500, duration=30*60*1000, brightness=50),  # sunrise (30 mins)
-    yeelight.TemperatureTransition(degrees=5500, duration=60*60*1000, brightness=100),  # brightening (1 hr)
-    yeelight.SleepTransition(duration=sleep_duration.total_seconds()*1000),  # sleep until real sunrise
-    yeelight.TemperatureTransition(degrees=2000, duration=50, brightness=0),  # finalize
-]
+    def sleep(t):
+        logging.debug("Sleeping for %g seconds", t)
 
-flow = yeelight.Flow(count=1, action=yeelight.Flow.actions.off, transitions=transitions)
-logging.info('Flow: %s', flow)
-logging.info('%s', flow.expression)
+    time.sleep = sleep
 
-# Sleep based on delay time
+else:
+    logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO)
 
-logging.info('Now sleeping for %d seconds, will continue at %s', delay.total_seconds(), start_time - datetime.timedelta(minutes=30))
-time.sleep(delay.total_seconds())
+LAT = 43.09176073408273
+LON = -73.49606500488254
+ALT = 114
 
-# Set up and run Flow (auto_on=True), turning off after transition
+BULB_IP = "192.168.1.13"
 
-try:
-    bulb = yeelight.Bulb('192.168.1.13', auto_on=True)
-    logging.info('Bulb found: %s', bulb)
-    logging.info('Starting flow %s', flow)
-    bulb.start_flow(flow)
-except Exception as exc:
-    exc_str = traceback.format_exception_only(*sys.exc_info()[:2])
-    Notify().send(''.join(exc_str))
-    raise
+
+def planck(lam, T):
+    """ Returns the spectral radiance of a black body at temperature T.
+
+    Returns the spectral radiance, B(lam, T), in W.sr-1.m-2 of a black body
+    at temperature T (in K) at a wavelength lam (in nm), using Planck's law.
+
+    """
+
+    lam_m = lam / 1.0e9
+    fac = h * c / lam_m / k / T
+    B = 2 * h * c ** 2 / lam_m ** 5 / (np.exp(fac) - 1)
+    return B
+
+
+def convert_K_to_RGB(colour_temperature):
+
+    lam = np.arange(380.0, 781.0, 5)
+    spec = planck(lam, colour_temperature)
+    rgb = CS_HDTV.spec_to_rgb(spec)
+    rgb = (255 * rgb).astype(int)
+
+    return rgb
+
+
+def set_values(bulb, rgb, bright):
+    bulb.set_rgb(*map(int, rgb))
+    bulb.set_brightness(int(bright))
+
+
+def run_flow(bulb, temp_range, bright_range, num_steps, sleep_duration=60):
+    for temp, bright in zip(np.linspace(*temp_range, num_steps),
+                            np.linspace(*bright_range, num_steps)):
+        set_values(bulb, convert_K_to_RGB(temp), bright)
+        time.sleep(sleep_duration)
+
+
+def main():
+
+    # The following steps are run every morning at 30 mins before sunrise:
+    #   1. Get sunrise/sunset times for current date
+    #   2. Compute start time and delay based on current date and time
+    #   3. Get weather at sunrise
+    #   4. Set up transitions for fake sunrise (30-min), brightening (1-hr), and sleep (til 1 hr after real sunrise)
+    #   5. Sleep based on delay time
+    #   6. Set up and run Flow (auto_on=True), turning off after transition
+
+    # Get sunrise/sunset times for current date
+
+    today = datetime.today()
+    logging.info("Today is %s", today)
+
+    sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
+    logging.info("Sun: %s", sun)
+
+    sunrise = sun.riselocal(today)
+    sunset = sun.setlocal(today)
+    midday = (sunrise + sunset) / 2
+
+    logging.info("Sunrise today: %s", sunrise)
+    logging.info("Sunset today: %s", sunset)
+    logging.info('Midday today: %s', midday)
+
+    # Compute start time and delay based on current date and time
+
+    long_day = sun.durationdelta(date(2021, 6, 21))
+    short_day = sun.durationdelta(date(2021, 12, 21))
+
+    today_duration = sun.durationdelta(today)
+    logging.info("Daylight duration today: %s", today_duration)
+
+    today_excess = (today_duration - short_day).total_seconds()
+    max_excess = (long_day - short_day).total_seconds()
+    target_day_hours = 2 * today_excess / max_excess + 14
+    target_day = timedelta(hours=target_day_hours)
+    logging.info("Target duration: %s", target_day)
+
+    trans_delay = max(1 - (today - datetime(2021, 12, 8)) / timedelta(days=28), 0,)
+    logging.info("Transition delay: %s", trans_delay)
+
+    start_time = sunset - target_day + trans_delay * (target_day - today_duration)
+    logging.info("Start time: %s", start_time)
+
+    morning = midday - start_time - datetime.timedelta(minutes=60)
+    afternoon = sunset - midday - datetime.timedelta(minutes=60)
+    logging.info('Morning duration: %s', morning)
+    logging.info('Afternoon duration: %s', afternoon)
+
+    now = datetime.now(tz=tzlocal.get_localzone())
+    logging.info("Time right now: %s", now)
+
+    delay = start_time - now - timedelta(minutes=30)
+    logging.info("Sleep delay: %s", delay)
+
+    if not __debug__ and delay.total_seconds() < 0:
+        logging.info("Run in the past. Exiting.")
+        sys.exit()
+
+    # Sleep based on delay time
+
+    logging.info(
+        "Now sleeping for %d seconds, will continue at %s",
+        delay.total_seconds(),
+        start_time - timedelta(minutes=30),
+    )
+    time.sleep(delay.total_seconds())
+
+    # Set up and run flow, turning off after transition
+
+    bulb = yeelight.Bulb(BULB_IP, auto_on=True)
+    logging.info("Bulb found: %s", bulb)
+
+    # 30 minutes from 2000K to 3500K and from 0 brightness to 50 brightness
+    run_flow(bulb, (2000, 3500), (0, 50), 30)
+
+    # 60 minutes from 3500K to 5500K and from 50 brightness to 100 brightness
+    run_flow(bulb, (3500, 5500), (50, 100), 60)
+
+    sleep_duration = sunrise - start_time + timedelta(minutes=90)
+    logging.info("On time following sunrise: %s", sleep_duration)
+
+    logging.info(
+        "Now sleeping for %d seconds, will continue at %s",
+        sleep_duration.total_seconds(),
+        datetime.now() + sleep_duration,
+    )
+
+    time.sleep(sleep_duration.total_seconds())
+
+    logging.info("Resetting bulb")
+    set_values(bulb, convert_K_to_RGB(2000), 0)
+
+    logging.info("Turning bulb off")
+    bulb.turn_off()
+
+
+if __name__ == "__main__":
+    main()
