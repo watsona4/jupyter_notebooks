@@ -34,9 +34,11 @@ logging.info('Sun: %s', sun)
     
 sunrise = sun.riselocal(today)
 sunset = sun.setlocal(today)
+midday = (sunrise + sunset) / 2
 
 logging.info('Sunrise today: %s', sunrise)
 logging.info('Sunset today: %s', sunset)
+logging.info('Midday today: %s', midday)
 
 # Compute start time and delay based on current date and time
     
@@ -55,6 +57,11 @@ logging.info('Transition delay: %s', trans_delay)
   
 start_time = sunset - target_day + trans_delay * (target_day - today_duration)
 logging.info('Start time: %s', start_time)
+
+morning = midday - start_time - datetime.timedelta(minutes=60)
+afternoon = sunset - midday - datetime.timedelta(minutes=60)
+logging.info('Morning duration: %s', morning)
+logging.info('Afternoon duration: %s', afternoon)
  
 now = datetime.datetime.now(tz=tzlocal.get_localzone())
 logging.info('Time right now: %s', now)
