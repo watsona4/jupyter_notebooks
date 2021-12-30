@@ -158,11 +158,26 @@ def main():
     bulb = yeelight.Bulb(BULB_IP, auto_on=True)
     logging.info("Bulb found: %s", bulb)
 
-    # 30 minutes from 2000K to 3500K and from 0 brightness to 50 brightness
-    run_flow(bulb, (2000, 3500), (0, 50), 30)
+    # 30 minutes from 2000K to 3500K and from 0 brightness to 65 brightness
+    run_flow(bulb, (2000, 3500), (0, 65), 30)
 
-    # 60 minutes from 3500K to 5500K and from 50 brightness to 100 brightness
-    run_flow(bulb, (3500, 5500), (50, 100), 60)
+    # 30 minutes from 2000K to 3500K and from 0 brightness to 65 brightness
+    run_flow(bulb, (2000, 3500), (0, 65), 30)
+
+    # 60 minutes from 3500K to 5500K and from 65 brightness to 75 brightness
+    run_flow(bulb, (3500, 5500), (65, 75), 60)
+
+    # Morning from 5500K to 6500K and from 75 brightness to 100 brightness
+    run_flow(bulb, (5500, 6500), (75, 100), morning.total_seconds() / 60)
+
+    # Afternoon from 6500K to 5500K and from 100 brightness to 75 brightness
+    run_flow(bulb, (6500, 5500), (100, 75), afternoon.total_seconds() / 60)
+
+    # 60 minutes from 5500K to 3500K and from 75 brightness to 65 brightness
+    run_flow(bulb, (5500, 3500), (75, 65), 60)
+
+    # 30 minutes from 3500K to 2000K and from 65 brightness to 0 brightness
+    run_flow(bulb, (3500, 2000), (65, 0), 30)
 
     sleep_duration = sunrise - start_time + timedelta(minutes=90)
     logging.info("On time following sunrise: %s", sleep_duration)
