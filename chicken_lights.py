@@ -13,6 +13,8 @@ from colour_system import CS_HDTV
 
 if __debug__:
 
+    CUR_TIME = None
+
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
     )
@@ -33,7 +35,9 @@ if __debug__:
     yeelight.main.Bulb.turn_off = turn_off
 
     def sleep(t):
-        logging.debug("Sleeping for %g seconds", t)
+        global CUR_TIME
+        CUR_TIME += timedelta(seconds=t)
+        logging.debug("Sleeping for %g seconds, current time is %s", t, CUR_TIME)
 
     time.sleep = sleep
 
@@ -77,6 +81,10 @@ def set_values(bulb, rgb, bright):
 
 
 def run_flow(bulb, temp_range, bright_range, num_steps, sleep_duration=60):
+    num_steps = int(num_steps)
+    logging.debug("Flow from %dK (%d%%) to %dK (%d%%) in %d steps of %f sec",
+                  temp_range[0], bright_range[0], temp_range[1], bright_range[1],
+                  num_steps, sleep_duration)
     for temp, bright in zip(np.linspace(*temp_range, num_steps),
                             np.linspace(*bright_range, num_steps)):
         set_values(bulb, convert_K_to_RGB(temp), bright)
@@ -84,6 +92,8 @@ def run_flow(bulb, temp_range, bright_range, num_steps, sleep_duration=60):
 
 
 def main():
+
+    global CUR_TIME
 
     # The following steps are run every morning at 30 mins before sunrise:
     #   1. Get sunrise/sunset times for current date
@@ -98,12 +108,14 @@ def main():
     today = datetime.today()
     logging.info("Today is %s", today)
 
+    CUR_TIME = today
+
     sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
     logging.info("Sun: %s", sun)
 
     sunrise = sun.riselocal(today)
     sunset = sun.setlocal(today)
-    midday = (sunrise + sunset) / 2
+    midday = sunrise + (sunset - sunrise) / 2
 
     logging.info("Sunrise today: %s", sunrise)
     logging.info("Sunset today: %s", sunset)
@@ -129,8 +141,8 @@ def main():
     start_time = sunset - target_day + trans_delay * (target_day - today_duration)
     logging.info("Start time: %s", start_time)
 
-    morning = midday - start_time - datetime.timedelta(minutes=60)
-    afternoon = sunset - midday - datetime.timedelta(minutes=60)
+    morning = midday - start_time - timedelta(minutes=60)
+    afternoon = sunset - midday - timedelta(minutes=60)
     logging.info('Morning duration: %s', morning)
     logging.info('Afternoon duration: %s', afternoon)
 
@@ -159,39 +171,32 @@ def main():
     logging.info("Bulb found: %s", bulb)
 
     # 30 minutes from 2000K to 3500K and from 0 brightness to 65 brightness
-    run_flow(bulb, (2000, 3500), (0, 65), 30)
-
-    # 30 minutes from 2000K to 3500K and from 0 brightness to 65 brightness
+    logging.info("Twilight")
     run_flow(bulb, (2000, 3500), (0, 65), 30)
 
     # 60 minutes from 3500K to 5500K and from 65 brightness to 75 brightness
+    logging.info("Sunrise")
     run_flow(bulb, (3500, 5500), (65, 75), 60)
 
     # Morning from 5500K to 6500K and from 75 brightness to 100 brightness
-    run_flow(bulb, (5500, 6500), (75, 100), morning.total_seconds() / 60)
+    logging.info("Morning")
+    num_steps = morning.total_seconds() // 60
+    duration = morning.total_seconds() / num_steps
+    run_flow(bulb, (5500, 6500), (75, 100), num_steps, duration)
 
     # Afternoon from 6500K to 5500K and from 100 brightness to 75 brightness
-    run_flow(bulb, (6500, 5500), (100, 75), afternoon.total_seconds() / 60)
+    logging.info("Afternoon")
+    num_steps = afternoon.total_seconds() // 60
+    duration = afternoon.total_seconds() / num_steps
+    run_flow(bulb, (6500, 5500), (100, 75), num_steps, duration)
 
     # 60 minutes from 5500K to 3500K and from 75 brightness to 65 brightness
+    logging.info("Sunset")
     run_flow(bulb, (5500, 3500), (75, 65), 60)
 
     # 30 minutes from 3500K to 2000K and from 65 brightness to 0 brightness
+    logging.info("Twilight")
     run_flow(bulb, (3500, 2000), (65, 0), 30)
-
-    sleep_duration = sunrise - start_time + timedelta(minutes=90)
-    logging.info("On time following sunrise: %s", sleep_duration)
-
-    logging.info(
-        "Now sleeping for %d seconds, will continue at %s",
-        sleep_duration.total_seconds(),
-        datetime.now() + sleep_duration,
-    )
-
-    time.sleep(sleep_duration.total_seconds())
-
-    logging.info("Resetting bulb")
-    set_values(bulb, convert_K_to_RGB(2000), 0)
 
     logging.info("Turning bulb off")
     bulb.turn_off()
