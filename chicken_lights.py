@@ -1,7 +1,7 @@
-from datetime import date, datetime, timedelta
 import logging
 import sys
 import time
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import suntimes
@@ -50,6 +50,9 @@ ALT = 114
 
 BULB_IP = "192.168.1.13"
 
+SUMMER = 10000
+WINTER = 6500
+
 
 def planck(lam, T):
     """ Returns the spectral radiance of a black body at temperature T.
@@ -82,11 +85,18 @@ def set_values(bulb, rgb, bright):
 
 def run_flow(bulb, temp_range, bright_range, num_steps, sleep_duration=60):
     num_steps = int(num_steps)
-    logging.debug("Flow from %dK (%d%%) to %dK (%d%%) in %d steps of %f sec",
-                  temp_range[0], bright_range[0], temp_range[1], bright_range[1],
-                  num_steps, sleep_duration)
-    for temp, bright in zip(np.linspace(*temp_range, num_steps),
-                            np.linspace(*bright_range, num_steps)):
+    logging.debug(
+        "Flow from %dK (%d%%) to %dK (%d%%) in %d steps of %f sec",
+        temp_range[0],
+        bright_range[0],
+        temp_range[1],
+        bright_range[1],
+        num_steps,
+        sleep_duration,
+    )
+    for temp, bright in zip(
+        np.linspace(*temp_range, num_steps), np.linspace(*bright_range, num_steps)
+    ):
         set_values(bulb, convert_K_to_RGB(temp), bright)
         time.sleep(sleep_duration)
 
@@ -105,10 +115,10 @@ def main():
 
     # Get sunrise/sunset times for current date
 
-    today = datetime.today()
+    today = date.today()
     logging.info("Today is %s", today)
 
-    CUR_TIME = today
+    CUR_TIME = datetime.today()
 
     sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
     logging.info("Sun: %s", sun)
@@ -119,15 +129,23 @@ def main():
 
     logging.info("Sunrise today: %s", sunrise)
     logging.info("Sunset today: %s", sunset)
-    logging.info('Midday today: %s', midday)
+    logging.info("Midday today: %s", midday)
 
     # Compute start time and delay based on current date and time
 
-    long_day = sun.durationdelta(date(2021, 6, 21))
-    short_day = sun.durationdelta(date(2021, 12, 21))
+    longest_day = date(today.year, 6, 21)
+    shortest_day = date(today.year, 12, 21)
+
+    long_day = sun.durationdelta(longest_day)
+    short_day = sun.durationdelta(shortest_day)
 
     today_duration = sun.durationdelta(today)
     logging.info("Daylight duration today: %s", today_duration)
+
+    daylight = (SUMMER - WINTER) / 2 * np.cos(
+        np.pi * (longest_day - today) / (longest_day - shortest_day)
+    ) + (SUMMER + WINTER) / 2
+    logging.info("Daylight color: %fK", daylight)
 
     today_excess = (today_duration - short_day).total_seconds()
     max_excess = (long_day - short_day).total_seconds()
@@ -135,7 +153,7 @@ def main():
     target_day = timedelta(hours=target_day_hours)
     logging.info("Target duration: %s", target_day)
 
-    trans_delay = max(1 - (today - datetime(2021, 12, 8)) / timedelta(days=28), 0,)
+    trans_delay = max(1 - (today - date(2021, 12, 8)) / timedelta(days=28), 0,)
     logging.info("Transition delay: %s", trans_delay)
 
     start_time = sunset - target_day + trans_delay * (target_day - today_duration)
@@ -143,8 +161,8 @@ def main():
 
     morning = midday - start_time - timedelta(minutes=60)
     afternoon = sunset - midday - timedelta(minutes=60)
-    logging.info('Morning duration: %s', morning)
-    logging.info('Afternoon duration: %s', afternoon)
+    logging.info("Morning duration: %s", morning)
+    logging.info("Afternoon duration: %s", afternoon)
 
     now = datetime.now(tz=tzlocal.get_localzone())
     logging.info("Time right now: %s", now)
@@ -182,13 +200,13 @@ def main():
     logging.info("Morning")
     num_steps = morning.total_seconds() // 60
     duration = morning.total_seconds() / num_steps
-    run_flow(bulb, (5500, 6500), (75, 100), num_steps, duration)
+    run_flow(bulb, (5500, daylight), (75, 100), num_steps, duration)
 
     # Afternoon from 6500K to 5500K and from 100 brightness to 75 brightness
     logging.info("Afternoon")
     num_steps = afternoon.total_seconds() // 60
     duration = afternoon.total_seconds() / num_steps
-    run_flow(bulb, (6500, 5500), (100, 75), num_steps, duration)
+    run_flow(bulb, (daylight, 5500), (100, 75), num_steps, duration)
 
     # 60 minutes from 5500K to 3500K and from 75 brightness to 65 brightness
     logging.info("Sunset")
