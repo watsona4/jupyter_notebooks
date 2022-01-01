@@ -77,10 +77,10 @@ def main():
 
     dsp = date(today.year, 8, 15)
 
-    today = (dl - dsp) / 2 * (np.cos(np.pi * (dl - today) / (dl - ds)) + 1) + dsp
+    todayp = (dl - dsp) / 2 * (np.cos(np.pi * (dl - today) / (dl - ds)) + 1) + dsp
 
-    start_time = datetime.fromisoformat(f"{today} 00:00:00.000000")
-    end_time = datetime.fromisoformat(f"{today} 23:59:59.999999")
+    start_time = datetime.fromisoformat(f"{todayp} 00:00:00.000000")
+    end_time = datetime.fromisoformat(f"{todayp} 23:59:59.999999")
 
     times = pd.date_range(start_time, end_time, freq="1min", tz="America/New_York")
     num_times = len(times)
@@ -128,18 +128,17 @@ def main():
     delay = start_time - now
     logging.info("Sleep delay: %s", delay)
 
-    if not __debug__ and delay.total_seconds() < 0:
-        logging.info("Run in the past. Exiting.")
-        sys.exit()
-
-    # Sleep based on delay time
-
-    logging.info(
-        "Now sleeping for %d seconds, will continue at %s",
-        delay.total_seconds(),
-        now + delay,
-    )
-    time.sleep(delay.total_seconds())
+    if delay.total_seconds() < 0:
+        mins = delay.total_seconds() / 60
+        logging.info("Stripping first %d entries", int(np.abs(mins)))
+        colors = colors[int(np.abs(mins)) :]
+    else:
+        logging.info(
+            "Now sleeping for %d seconds, will continue at %s",
+            delay.total_seconds(),
+            now + delay,
+        )
+        time.sleep(delay.total_seconds())
 
     # Set up and run flow, turning off after transition
 
@@ -148,7 +147,7 @@ def main():
 
     for _, color, bright in colors:
 
-        color = (255 * color).round().astype(int)
+        color = list(map(int, (255 * color).round()))
         bright = int(round(100 * bright))
 
         logging.info("color = %s, brightness = %d", color, bright)
