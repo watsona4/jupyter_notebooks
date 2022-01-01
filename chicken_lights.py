@@ -52,12 +52,6 @@ ALT = 114
 BULB_IP = "192.168.1.13"
 
 
-def set_values(bulb, rgb, bright):
-    logging.info("color = %s, brightness = %d", rgb, bright)
-    bulb.set_rgb(*map(int, rgb))
-    bulb.set_brightness(int(bright))
-
-
 def main():
 
     global CUR_TIME
@@ -153,7 +147,14 @@ def main():
     logging.info("Bulb found: %s", bulb)
 
     for _, color, bright in colors:
-        set_values(bulb, (255 * color).round(), round(100 * bright))
+
+        color = (255 * color).round().astype(int)
+        bright = int(round(100 * bright))
+
+        logging.info("color = %s, brightness = %d", color, bright)
+        bulb.set_rgb(*color)
+        bulb.set_brightness(bright)
+
         time.sleep(60)
 
     logging.info("Turning bulb off")
