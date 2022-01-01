@@ -4,10 +4,11 @@ import time
 from datetime import date, datetime, timedelta
 
 import numpy as np
+import pandas as pd
 import suntimes
 import tzlocal
 import yeelight
-from scipy.constants import c, h, k
+from pvlib import atmosphere, solarposition, spectrum
 
 from colour_system import CS_HDTV
 
@@ -50,68 +51,16 @@ ALT = 114
 
 BULB_IP = "192.168.1.13"
 
-SUMMER = 10000
-WINTER = 6500
-
-
-def planck(lam, T):
-    """ Returns the spectral radiance of a black body at temperature T.
-
-    Returns the spectral radiance, B(lam, T), in W.sr-1.m-2 of a black body
-    at temperature T (in K) at a wavelength lam (in nm), using Planck's law.
-
-    """
-
-    lam_m = lam / 1.0e9
-    fac = h * c / lam_m / k / T
-    B = 2 * h * c ** 2 / lam_m ** 5 / (np.exp(fac) - 1)
-    return B
-
-
-def convert_K_to_RGB(colour_temperature):
-
-    lam = np.arange(380.0, 781.0, 5)
-    spec = planck(lam, colour_temperature)
-    rgb = CS_HDTV.spec_to_rgb(spec)
-    rgb = (255 * rgb).astype(int)
-
-    return rgb
-
 
 def set_values(bulb, rgb, bright):
+    logging.info("color = %s, brightness = %d", rgb, bright)
     bulb.set_rgb(*map(int, rgb))
     bulb.set_brightness(int(bright))
-
-
-def run_flow(bulb, temp_range, bright_range, num_steps, sleep_duration=60):
-    num_steps = int(num_steps)
-    logging.debug(
-        "Flow from %dK (%d%%) to %dK (%d%%) in %d steps of %f sec",
-        temp_range[0],
-        bright_range[0],
-        temp_range[1],
-        bright_range[1],
-        num_steps,
-        sleep_duration,
-    )
-    for temp, bright in zip(
-        np.linspace(*temp_range, num_steps), np.linspace(*bright_range, num_steps)
-    ):
-        set_values(bulb, convert_K_to_RGB(temp), bright)
-        time.sleep(sleep_duration)
 
 
 def main():
 
     global CUR_TIME
-
-    # The following steps are run every morning at 30 mins before sunrise:
-    #   1. Get sunrise/sunset times for current date
-    #   2. Compute start time and delay based on current date and time
-    #   3. Get weather at sunrise
-    #   4. Set up transitions for fake sunrise (30-min), brightening (1-hr), and sleep (til 1 hr after real sunrise)
-    #   5. Sleep based on delay time
-    #   6. Set up and run Flow (auto_on=True), turning off after transition
 
     # Get sunrise/sunset times for current date
 
@@ -125,49 +74,64 @@ def main():
 
     sunrise = sun.riselocal(today)
     sunset = sun.setlocal(today)
-    midday = sunrise + (sunset - sunrise) / 2
 
     logging.info("Sunrise today: %s", sunrise)
     logging.info("Sunset today: %s", sunset)
-    logging.info("Midday today: %s", midday)
 
-    # Compute start time and delay based on current date and time
+    dl = date(today.year, 6, 21)
+    ds = date(today.year, 12, 21)
 
-    longest_day = date(today.year, 6, 21)
-    shortest_day = date(today.year, 12, 21)
+    dsp = date(today.year, 8, 15)
 
-    long_day = sun.durationdelta(longest_day)
-    short_day = sun.durationdelta(shortest_day)
+    today = (dl - dsp) / 2 * (np.cos(np.pi * (dl - today) / (dl - ds)) + 1) + dsp
 
-    today_duration = sun.durationdelta(today)
-    logging.info("Daylight duration today: %s", today_duration)
+    start_time = datetime.fromisoformat(f"{today} 00:00:00.000000")
+    end_time = datetime.fromisoformat(f"{today} 23:59:59.999999")
 
-    daylight = (SUMMER - WINTER) / 2 * np.cos(
-        np.pi * (longest_day - today) / (longest_day - shortest_day)
-    ) + (SUMMER + WINTER) / 2
-    logging.info("Daylight color: %fK", daylight)
+    times = pd.date_range(start_time, end_time, freq="1min", tz="America/New_York")
+    num_times = len(times)
 
-    today_excess = (today_duration - short_day).total_seconds()
-    max_excess = (long_day - short_day).total_seconds()
-    target_day_hours = 2 * today_excess / max_excess + 14
-    target_day = timedelta(hours=target_day_hours)
-    logging.info("Target duration: %s", target_day)
+    solpos = solarposition.get_solarposition(times, LAT, LON)
 
-    trans_delay = max(1 - (today - date(2021, 12, 8)) / timedelta(days=28), 0,)
-    logging.info("Transition delay: %s", trans_delay)
+    relative_airmass = atmosphere.get_relative_airmass(solpos.apparent_zenith)
 
-    start_time = sunset - target_day + trans_delay * (target_day - today_duration)
+    spectra = spectrum.spectrl2(
+        apparent_zenith=solpos.apparent_zenith,
+        aoi=solpos.apparent_zenith,
+        surface_tilt=0,
+        ground_albedo=0.2,
+        surface_pressure=101300,
+        relative_airmass=relative_airmass,
+        precipitable_water=0.5,
+        ozone=0.31,
+        aerosol_turbidity_500nm=0.1,
+    )
+
+    lam = np.arange(380.0, 781.0, 5)
+    spec = np.array(
+        [
+            np.interp(lam, spectra["wavelength"], spectra["poa_global"][:, i])
+            for i in range(num_times)
+        ]
+    )
+
+    norms = np.array([np.linalg.norm(v) for v in spec])
+    nanmax = np.nanmax(norms)
+    brights = norms / nanmax
+
+    colors = np.array(
+        [(t, CS_HDTV.spec_to_rgb(s), b) for t, s, b in zip(times, spec, brights)],
+        dtype=object,
+    )
+    colors = colors[np.invert(np.isnan(colors[:, 2].astype(float)))]
+
+    start_time = sunset - (colors[-1][0] - colors[0][0]).to_pytimedelta()
     logging.info("Start time: %s", start_time)
-
-    morning = midday - start_time - timedelta(minutes=60)
-    afternoon = sunset - midday - timedelta(minutes=60)
-    logging.info("Morning duration: %s", morning)
-    logging.info("Afternoon duration: %s", afternoon)
 
     now = datetime.now(tz=tzlocal.get_localzone())
     logging.info("Time right now: %s", now)
 
-    delay = start_time - now - timedelta(minutes=30)
+    delay = start_time - now
     logging.info("Sleep delay: %s", delay)
 
     if not __debug__ and delay.total_seconds() < 0:
@@ -179,7 +143,7 @@ def main():
     logging.info(
         "Now sleeping for %d seconds, will continue at %s",
         delay.total_seconds(),
-        start_time - timedelta(minutes=30),
+        now + delay,
     )
     time.sleep(delay.total_seconds())
 
@@ -188,33 +152,9 @@ def main():
     bulb = yeelight.Bulb(BULB_IP, auto_on=True)
     logging.info("Bulb found: %s", bulb)
 
-    # 30 minutes from 2000K to 3500K and from 0 brightness to 65 brightness
-    logging.info("Twilight")
-    run_flow(bulb, (2000, 3500), (0, 65), 30)
-
-    # 60 minutes from 3500K to 5500K and from 65 brightness to 75 brightness
-    logging.info("Sunrise")
-    run_flow(bulb, (3500, 5500), (65, 75), 60)
-
-    # Morning from 5500K to 6500K and from 75 brightness to 100 brightness
-    logging.info("Morning")
-    num_steps = morning.total_seconds() // 60
-    duration = morning.total_seconds() / num_steps
-    run_flow(bulb, (5500, daylight), (75, 100), num_steps, duration)
-
-    # Afternoon from 6500K to 5500K and from 100 brightness to 75 brightness
-    logging.info("Afternoon")
-    num_steps = afternoon.total_seconds() // 60
-    duration = afternoon.total_seconds() / num_steps
-    run_flow(bulb, (daylight, 5500), (100, 75), num_steps, duration)
-
-    # 60 minutes from 5500K to 3500K and from 75 brightness to 65 brightness
-    logging.info("Sunset")
-    run_flow(bulb, (5500, 3500), (75, 65), 60)
-
-    # 30 minutes from 3500K to 2000K and from 65 brightness to 0 brightness
-    logging.info("Twilight")
-    run_flow(bulb, (3500, 2000), (65, 0), 30)
+    for _, color, bright in colors:
+        set_values(bulb, (255 * color).round(), round(100 * bright))
+        time.sleep(60)
 
     logging.info("Turning bulb off")
     bulb.turn_off()
