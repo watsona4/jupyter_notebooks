@@ -3,8 +3,8 @@ from scipy.constants import h, c, k
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 
-from colour_system import cs_hdtv, cs_srgb
-cs = cs_srgb
+from colour_system import CS_HDTV, CS_SRGB
+cs = CS_SRGB
 
 def planck(lam, T):
     """ Returns the spectral radiance of a black body at temperature T.
