@@ -1,14 +1,16 @@
 import logging
 import sys
 import time
+import traceback
 from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
+from notify_run import Notify
 import suntimes
 import tzlocal
 import yeelight
-from pvlib import atmosphere, solarposition, spectrum
+from pvlib import atmosphere, spectrum, location
 
 from colour_system import CS_HDTV
 
@@ -21,12 +23,14 @@ if __debug__:
     )
 
     def set_rgb(self, r, g, b):
-        logging.debug("Setting color to (%3d, %3d, %3d)", r, g, b)
+        #logging.debug("Setting color to (%3d, %3d, %3d)", r, g, b)
+        pass
 
     yeelight.main.Bulb.set_rgb = set_rgb
 
     def set_brightness(self, b):
-        logging.debug("Setting brightness to %3d", b)
+        #logging.debug("Setting brightness to %3d", b)
+        pass
 
     yeelight.main.Bulb.set_brightness = set_brightness
 
@@ -38,7 +42,7 @@ if __debug__:
     def sleep(t):
         global CUR_TIME
         CUR_TIME += timedelta(seconds=t)
-        logging.debug("Sleeping for %g seconds, current time is %s", t, CUR_TIME)
+        #logging.debug("Sleeping for %g seconds, current time is %s", t, CUR_TIME)
 
     time.sleep = sleep
 
@@ -85,7 +89,10 @@ def main():
     times = pd.date_range(start_time, end_time, freq="1min", tz="America/New_York")
     num_times = len(times)
 
-    solpos = solarposition.get_solarposition(times, LAT, LON)
+    loc = location.Location(latitude=LAT, longitude=LON, altitude=ALT)
+
+    clearsky = loc.get_clearsky(times)
+    solpos = loc.get_solarposition(times)
 
     relative_airmass = atmosphere.get_relative_airmass(solpos.apparent_zenith)
 
@@ -111,10 +118,11 @@ def main():
 
     norms = np.array([np.linalg.norm(v) for v in spec])
     nanmax = np.nanmax(norms)
+    logging.info("Max. irradiance: %s", nanmax)
     brights = norms / nanmax
 
     colors = np.array(
-        [(t, CS_HDTV.spec_to_rgb(s), b) for t, s, b in zip(times, spec, brights)],
+        [(t, CS_HDTV.spec_to_rgb(s), b, a, r) for t, s, b, a, r in zip(times, spec, brights, solpos.azimuth, clearsky.ghi)],
         dtype=object,
     )
     colors = colors[np.invert(np.isnan(colors[:, 2].astype(float)))]
@@ -145,14 +153,25 @@ def main():
     bulb = yeelight.Bulb(BULB_IP, auto_on=True)
     logging.info("Bulb found: %s", bulb)
 
-    for _, color, bright in colors:
+    notify = Notify()
+    notified = False
+
+    for _, color, bright, azimuth, irradiance in colors:
 
         color = list(map(int, (255 * color).round()))
+
+        if not notified and azimuth > 200 and irradiance > 880:
+            notify.send('Close west-facing windows')
+            notified = True
+
         bright = int(round(100 * bright))
 
-        logging.info("color = %s, brightness = %d", color, bright)
-        bulb.set_rgb(*color)
-        bulb.set_brightness(bright)
+        try:
+            logging.info("color = %s, brightness = %d, azimuth = %.2f, irradiance = %.2f", color, bright, azimuth, irradiance)
+            bulb.set_rgb(*color)
+            bulb.set_brightness(bright)
+        except:
+            traceback.print_exc()
 
         time.sleep(60)
 
