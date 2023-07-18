@@ -47,7 +47,8 @@ if __debug__:
     time.sleep = sleep
 
 else:
-    logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO)
+    logging.basicConfig(filename="chicken_lights_{}.log".format(date.today().strftime("%Y-%m-%d")),
+	format="%(asctime)s: %(message)s", level=logging.INFO)
 
 LAT = 43.09176073408273
 LON = -73.49606500488254
