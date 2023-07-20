@@ -32,7 +32,7 @@ DEVICES = {}  # Dictionary of devices
 
 ARDUINO_ADDR = "http://192.168.1.16"  # URL of light sensor
 
-THRESHOLD = 40  # Lower lux for turning lights on
+THRESHOLD = 5  # Lower lux for turning lights on
 AZIMUTH = 230  # Solar apparent azimuth for closing windows
 
 # Gets dictionary of devices and establishes connection to BLE mesh network.
@@ -81,9 +81,8 @@ def main():
     notified = False
 
     # Connect to light network
-    connect()
-    turn_off()
-    turn_on()
+    #connect()
+
     # Main loop
     while True:
         # If off-time, skip
@@ -111,12 +110,14 @@ def main():
             # If below threshold, turn on lights
             if not lights_on and lux < THRESHOLD:
                 logging.info("Too dark! (<%f) Turning on lights", THRESHOLD)
-                turn_on()
+                #turn_on()
+                notify.send("Turn on lights")
                 lights_on = True
 
             if lights_on and lux >= THRESHOLD:
                 logging.info("Too bright! (<%f) Turning off lights", THRESHOLD)
-                turn_off()
+                #turn_off()
+                notify.send("Turn off lights")
                 lights_on = False
 
             # Check solar azimuth. If > 220° and it's summer, notify to close windows
@@ -138,7 +139,8 @@ def main():
         elif lights_on:
             # Outside on-time and lights are on, turn them off
             logging.info("Bedtime! Turning off lights")
-            turn_off()
+            #turn_off()
+            notify.send("Turn off lights")
             lights_on = False
 
         # Sleep for 30 seconds
