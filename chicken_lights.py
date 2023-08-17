@@ -46,7 +46,7 @@ if __debug__:
 
 else:
     logging.basicConfig(
-        filename="chicken_lights.log",
+        filename="/var/log/chicken_lights.log",
         format="%(asctime)s: %(message)s",
         level=logging.INFO,
     )
@@ -172,4 +172,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    old_day = date.today() - timedelta(days=1)
+    while True:
+        today = date.today()
+        if today - old_day > timedelta(days=1):
+            old_day = today
+            main()
+        time.sleep(60)
