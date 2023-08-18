@@ -175,7 +175,7 @@ if __name__ == "__main__":
     old_day = date.today() - timedelta(days=1)
     while True:
         today = date.today()
-        if today - old_day > timedelta(days=1):
+        if today - old_day >= timedelta(days=1):
             old_day = today
             main()
         time.sleep(60)
