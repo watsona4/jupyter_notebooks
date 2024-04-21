@@ -41,7 +41,7 @@ class ssdManager():
 				bounceCount = 0
 				
 			if bounceCount > 1:
-				print "ssdManager::runSDManager: Shutting down now"
+				print("ssdManager::runSDManager: Shutting down now")
 				os.system("sudo shutdown -h now")
 				#print "DUMMY -- sudo shutdown -h now"
 				bounceCount = 0
