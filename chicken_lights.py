@@ -57,6 +57,9 @@ ALT = 114
 
 BULB_IP = "192.168.1.13"
 
+BULB = yeelight.Bulb(BULB_IP, auto_on=True)
+logging.info("Bulb found: %s", BULB)
+
 
 def main():
     global CUR_TIME
@@ -150,9 +153,6 @@ def main():
 
     # Set up and run flow, turning off after transition
 
-    bulb = yeelight.Bulb(BULB_IP, auto_on=True)
-    logging.info("Bulb found: %s", bulb)
-
     for _, color, bright in colors:
         color = list(map(int, (255 * color).round()))
 
@@ -160,21 +160,24 @@ def main():
 
         try:
             logging.info("color = %s, brightness = %d", color, bright)
-            bulb.set_rgb(*color)
-            bulb.set_brightness(bright)
+            BULB.set_rgb(*color)
+            BULB.set_brightness(bright)
         except:
             traceback.print_exc()
 
         time.sleep(60)
 
     logging.info("Turning bulb off")
-    bulb.turn_off()
+    BULB.turn_off()
 
 
 if __name__ == "__main__":
     old_day = date.today() - timedelta(days=1)
     while True:
+        logging.info("    old_day: %s", old_day)
         today = date.today()
+        logging.info("    today: %s", today)
+        logging.info("        today - old_day = %s", today - old_day)
         if today - old_day >= timedelta(days=1):
             old_day = today
             main()

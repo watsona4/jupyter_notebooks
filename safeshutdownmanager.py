@@ -1,29 +1,16 @@
-#!/usr/bin/env python
-##########################################
-#
-# safeshutdown.py
-# Monitors the power fail/shutdown GPIO input and shuts down.
-# Steve Garratt
-#
-##########################################
+import time
+from subprocess import check_call
 
-import time									# Timer stuff
-import os									# System stuff
+import gpiozero
+from notify_run import Notify
 
-POWER_OFF_INPUT			= 17
-SYSFS_GPIO				= "/sys/class/gpio"
-SYSFS_POWEROFF_VALUE	= SYSFS_GPIO + "/gpio" + str(POWER_OFF_INPUT) + "/value"
 
-##########################################
-# ssdManager class
-# Manages an orderly shutdown.
-##########################################
+class ssdManager:
+    def __init__(self):
 
-class ssdManager():
-	def __init__(self):
-		#print "ssdManager::__init__:"
-		pass
+        self.fail = gpiozero.InputDevice(pin=17)
 
+<<<<<<< Updated upstream
 	##########################################
 	# runSDManager
 	# Starts the manager.
@@ -65,22 +52,33 @@ class ssdManager():
 		except IOError as e:
 			#print "ssdManager::readPowerOffIn: Error {} {} {}".format(SYSFS_POWEROFF_VALUE, e.errno, e.strerror)
 			pass
+=======
+        self.run = gpiozero.OutputDevice(pin=19)
+        self.run.on()
+>>>>>>> Stashed changes
 
-		#print "ssdManager::readPowerOffIn: [{}] [{}]".format(val, ret)
-		return ret
-		
-		
-		
-		
-##########################################
-# startSsdManager
-# Starts the manager.
-##########################################
-def startSsdManager():
-	#print "startSsdManager:"
-	
-	sdm = ssdManager()
-	sdm.runSDManager()
+    def runSDManager(self):
 
-if __name__ == '__main__':
-	startSsdManager()
+        notify = Notify()
+        bounceCount = 0
+
+        while True:
+
+            time.sleep(2)
+
+            if self.fail.is_active:
+                bounceCount += 1
+            else:
+                bounceCount = 0
+
+            if bounceCount > 1:
+                print("ssdManager::runSDManager: Shutting down now")
+                notify.send("Chicken lights shutting down!")
+                check_call(["sudo", "poweroff"])
+                bounceCount = 0
+                time.sleep(20)
+
+
+if __name__ == "__main__":
+    sdm = ssdManager()
+    sdm.runSDManager()
