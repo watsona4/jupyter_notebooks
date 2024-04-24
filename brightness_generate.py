@@ -18,9 +18,10 @@ def main():
 
     sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
 
-    now = datetime.now()
+    start_time = datetime.fromisoformat("2024-01-01 00:00:00.000")
+    end_time = datetime.fromisoformat("2024-12-31 23:59:59.999")
 
-    times = pd.date_range(now, now, tz="America/New_York")
+    times = pd.date_range(start_time, end_time, freq="1min", tz="America/New_York")
     num_times = len(times)
 
     loc = location.Location(latitude=LAT, longitude=LON, altitude=ALT)
@@ -49,8 +50,8 @@ def main():
         dhi=sky["dhi"],
     )
 
-    print(irr["poa_global"][0])
-
+    #irr.to_hdf("brightness.h5", key="data", mode="w", format="table", data_columns=True)
+    irr["poa_global"].to_pickle("brightness.pkl")
 
 if __name__ == "__main__":
     main()
