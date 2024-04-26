@@ -11,7 +11,9 @@ LAT = 43.09176073408273
 LON = -73.49606500488254
 ALT = 121
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
+)
 
 
 def on_publish(client, userdata, mid, reason_code, properties):
