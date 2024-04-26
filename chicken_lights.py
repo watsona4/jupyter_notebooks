@@ -1,99 +1,105 @@
+import argparse
 import logging
+import signal
 import sys
 import time
-import traceback
-from datetime import date, datetime, timedelta
 
 import numpy as np
+import paho.mqtt.client as mqtt
 import pandas as pd
 import suntimes
-import tzlocal
-import yeelight
 from pvlib import atmosphere, location, spectrum
 
 from colour_system import CS_HDTV
 
-if __debug__:
-    CUR_TIME = None
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
+)
 
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
-    )
+TOPIC = "chicken_lights"
 
-    def set_rgb(self, r, g, b):
-        # logging.debug("Setting color to (%3d, %3d, %3d)", r, g, b)
-        pass
+PARSER = argparse.ArgumentParser()
+PARSER.add_argument("--mqtt-server", help="IP address of the MQTT server")
+PARSER.add_argument("--port", type=int, default=1883, help="MQTT server port to use")
+PARSER.add_argument("--username", help="User name to log into MQTT server")
+PARSER.add_argument("--password", help="Password to log into MQTT server")
+PARSER.add_argument(
+    "--timezone", default="America/New_York", help="the timezone to use"
+)
+PARSER.add_argument(
+    "--latitude", type=float, default=43.09176073408273, help="latitude of location"
+)
+PARSER.add_argument(
+    "--longitude", type=float, default=-73.49606500488254, help="longitude of location"
+)
+PARSER.add_argument(
+    "--altitude", type=float, default=121, help="altitude of location in meters"
+)
 
-    yeelight.main.Bulb.set_rgb = set_rgb
+ARGS = PARSER.parse_args()
 
-    def set_brightness(self, b):
-        # logging.debug("Setting brightness to %3d", b)
-        pass
 
-    yeelight.main.Bulb.set_brightness = set_brightness
+def on_publish(client, userdata, mid, reason_code, properties):
+    logging.debug("Published %s", properties)
+    try:
+        userdata.remove(mid)
+    except KeyError:
+        logging.error("Race condition detected!")
 
-    def turn_off(self):
-        logging.debug("Turning off bulb")
 
-    yeelight.main.Bulb.turn_off = turn_off
+CLIENT = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
-    def sleep(t):
-        global CUR_TIME
-        CUR_TIME += timedelta(seconds=t)
-        # logging.debug("Sleeping for %g seconds, current time is %s", t, CUR_TIME)
+CLIENT.enable_logger()
+CLIENT.username_pw_set(ARGS.username, ARGS.password)
 
-    time.sleep = sleep
+CLIENT.on_publish = on_publish
 
-else:
-    logging.basicConfig(
-        filename="/var/log/chicken_lights.log",
-        format="%(asctime)s: %(message)s",
-        level=logging.INFO,
-    )
 
-LAT = 43.09176073408273
-LON = -73.49606500488254
-ALT = 114
+def handler(signum, frame):
+    CLIENT.disconnect()
+    CLIENT.loop_stop()
+    sys.exit(0)
 
-BULB_IP = "192.168.1.13"
 
-BULB = yeelight.Bulb(BULB_IP, auto_on=True)
-logging.info("Bulb found: %s", BULB)
+signal.signal(signal.SIGTERM, handler)
 
 
 def main():
-    global CUR_TIME
+    unacked_publish = set()
 
-    # Get sunrise/sunset times for current date
+    CLIENT.user_data_set(unacked_publish)
+    CLIENT.connect(ARGS.mqtt_server, ARGS.port, 60)
+    CLIENT.loop_start()
 
-    today = date.today()
+    today = pd.Timestamp.today(tz=ARGS.timezone)
     logging.info("Today is %s", today)
 
-    CUR_TIME = datetime.today()
-
-    sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
+    sun = suntimes.SunTimes(
+        latitude=ARGS.latitude, longitude=ARGS.longitude, altitude=ARGS.altitude
+    )
     logging.info("Sun: %s", sun)
 
-    sunrise = sun.riselocal(today)
-    sunset = sun.setlocal(today)
+    sunrise = pd.Timestamp(sun.riselocal(today)).tz_convert(ARGS.timezone)
+    sunset = pd.Timestamp(sun.setlocal(today)).tz_convert(ARGS.timezone)
 
     logging.info("Sunrise today: %s", sunrise)
     logging.info("Sunset today: %s", sunset)
 
-    dl = date(today.year, 6, 21)
-    ds = date(today.year, 12, 21)
+    dl = today.replace(month=6, day=21)
+    ds = today.replace(month=12, day=21)
 
-    dsp = date(today.year, 8, 15)
+    dsp = today.replace(month=8, day=15)
 
     todayp = (dl - dsp) / 2 * (np.cos(np.pi * (dl - today) / (dl - ds)) + 1) + dsp
 
-    start_time = datetime.fromisoformat(f"{todayp} 00:00:00.000000")
-    end_time = datetime.fromisoformat(f"{todayp} 23:59:59.999999")
+    start_time = todayp.replace(hour=0, minute=0, second=0, microsecond=0, nanosecond=0)
+    end_time = todayp.replace(hour=23, minute=59, second=59)
 
-    times = pd.date_range(start_time, end_time, freq="1min", tz="America/New_York")
-    num_times = len(times)
+    times = pd.date_range(start_time, end_time, freq="1min", tz=ARGS.timezone)
 
-    loc = location.Location(latitude=LAT, longitude=LON, altitude=ALT)
+    loc = location.Location(
+        latitude=ARGS.latitude, longitude=ARGS.longitude, altitude=ARGS.altitude
+    )
 
     solpos = loc.get_solarposition(times)
 
@@ -115,7 +121,7 @@ def main():
     spec = np.array(
         [
             np.interp(lam, spectra["wavelength"], spectra["poa_global"][:, i])
-            for i in range(num_times)
+            for i in range(len(times))
         ]
     )
 
@@ -124,16 +130,29 @@ def main():
     logging.info("Max. irradiance: %s", nanmax)
     brights = norms / nanmax
 
-    colors = np.array(
-        [(t, CS_HDTV.spec_to_rgb(s), b) for t, s, b in zip(times, spec, brights)],
-        dtype=object,
-    )
-    colors = colors[np.invert(np.isnan(colors[:, 2].astype(float)))]
+    spec = np.array([CS_HDTV.spec_to_rgb(s) for s in spec])
 
-    start_time = sunset - (colors[-1][0] - colors[0][0]).to_pytimedelta()
+    df = pd.DataFrame(
+        {
+            "Red": spec[:, 0],
+            "Green": spec[:, 1],
+            "Blue": spec[:, 2],
+            "Brightness": brights,
+        },
+        index=times,
+    )
+
+    df.dropna(inplace=True)
+
+    logging.info("df.tail(1)['Timestamp']: %s", df.index[-1])
+    logging.info("df[-1] - df[0]: %s", df.index[-1] - df.index[0])
+    delta_time = df.index[-1] - df.index[0]
+    logging.info("Delta time: %s (%s)", delta_time, type(delta_time))
+
+    start_time = sunset - delta_time
     logging.info("Start time: %s", start_time)
 
-    now = datetime.now(tz=tzlocal.get_localzone())
+    now = pd.Timestamp.now(tz=ARGS.timezone)
     logging.info("Time right now: %s", now)
 
     delay = start_time - now
@@ -142,7 +161,7 @@ def main():
     if delay.total_seconds() < 0:
         mins = delay.total_seconds() / 60
         logging.info("Stripping first %d entries", int(np.abs(mins)))
-        colors = colors[int(np.abs(mins)) :]
+        df = df.tail(-int(np.abs(mins)))
     else:
         logging.info(
             "Now sleeping for %d seconds, will continue at %s",
@@ -151,34 +170,25 @@ def main():
         )
         time.sleep(delay.total_seconds())
 
-    # Set up and run flow, turning off after transition
+    for idx, row in df.iterrows():
+        msg_info = CLIENT.publish(TOPIC, row.to_json(), qos=1)
+        unacked_publish.add(msg_info.mid)
 
-    for _, color, bright in colors:
-        color = list(map(int, (255 * color).round()))
+        while len(unacked_publish):
+            time.sleep(0.1)
 
-        bright = int(round(100 * bright))
-
-        try:
-            logging.info("color = %s, brightness = %d", color, bright)
-            BULB.set_rgb(*color)
-            BULB.set_brightness(bright)
-        except:
-            traceback.print_exc()
-
+        msg_info.wait_for_publish()
         time.sleep(60)
-
-    logging.info("Turning bulb off")
-    BULB.turn_off()
 
 
 if __name__ == "__main__":
-    old_day = date.today() - timedelta(days=1)
+    old_day = pd.Timestamp.today() - pd.Timedelta(days=1)
     while True:
         logging.info("    old_day: %s", old_day)
-        today = date.today()
+        today = pd.Timestamp.today()
         logging.info("    today: %s", today)
         logging.info("        today - old_day = %s", today - old_day)
-        if today - old_day >= timedelta(days=1):
+        if today - old_day >= pd.Timedelta(days=1):
             old_day = today
             main()
         time.sleep(60)
