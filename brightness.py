@@ -1,29 +1,54 @@
+import logging
+import signal
 import sys
 import time
-import traceback
-from datetime import date, datetime, timedelta
 
-import numpy as np
+import paho.mqtt.client as mqtt
 import pandas as pd
-import suntimes
-from pvlib import atmosphere, location, irradiance, clearsky
+from pvlib import atmosphere, clearsky, irradiance, location
 
 LAT = 43.09176073408273
 LON = -73.49606500488254
-ALT = 114
+ALT = 121
+
+logging.basicConfig(level=logging.WARNING)
 
 
-def main():
-    today = date.today()
+def on_publish(client, userdata, mid, reason_code, properties):
+    print("Published", properties)
+    try:
+        userdata.remove(mid)
+    except KeyError:
+        print("Race condition detected!")
 
-    sun = suntimes.SunTimes(latitude=LAT, longitude=LON, altitude=ALT)
 
-    now = datetime.now()
+unacked_publish = set()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client.enable_logger()
+client.username_pw_set("brightness", "brightness")
+
+client.on_publish = on_publish
+
+client.user_data_set(unacked_publish)
+client.connect("192.168.1.50", 1883, 60)
+client.loop_start()
+
+
+def handler(signum, frame):
+    client.disconnect()
+    client.loop_stop()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, handler)
+
+loc = location.Location(latitude=LAT, longitude=LON, altitude=ALT)
+
+while True:
+
+    now = pd.Timestamp.now()
 
     times = pd.date_range(now, now, tz="America/New_York")
-    num_times = len(times)
-
-    loc = location.Location(latitude=LAT, longitude=LON, altitude=ALT)
 
     solpos = loc.get_solarposition(times)
 
@@ -49,8 +74,13 @@ def main():
         dhi=sky["dhi"],
     )
 
-    print(irr["poa_global"][0])
+    msg_info = client.publish(
+        "brightness", irr.T.squeeze().to_json(orient="index"), qos=1
+    )
+    unacked_publish.add(msg_info.mid)
 
+    while len(unacked_publish):
+        time.sleep(0.1)
 
-if __name__ == "__main__":
-    main()
+    msg_info.wait_for_publish()
+    time.sleep(1)
