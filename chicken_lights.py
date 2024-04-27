@@ -195,7 +195,7 @@ def main():
 
 
 if __name__ == "__main__":
-    old_day = pd.Timestamp.today() - pd.Timedelta(days=1)
+    old_day = pd.Timestamp(pd.Timestamp.today().date() - pd.Timedelta(days=1))
     while True:
         logging.info("    old_day: %s", old_day)
         today = pd.Timestamp.today()
