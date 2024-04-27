@@ -13,7 +13,7 @@ from pvlib import atmosphere, location, spectrum
 from colour_system import CS_HDTV
 
 logging.basicConfig(
-    format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.DEBUG
+    format="%(asctime)s [%(levelname)s]: %(message)s", level=logging.INFO
 )
 
 TOPIC = "chicken_lights"
@@ -95,7 +95,7 @@ def main():
     start_time = todayp.replace(hour=0, minute=0, second=0, microsecond=0, nanosecond=0)
     end_time = todayp.replace(hour=23, minute=59, second=59)
 
-    times = pd.date_range(start_time, end_time, freq="1min", tz=ARGS.timezone)
+    times = pd.date_range(start_time, end_time, freq="10s", tz=ARGS.timezone)
 
     loc = location.Location(
         latitude=ARGS.latitude, longitude=ARGS.longitude, altitude=ARGS.altitude
@@ -144,8 +144,6 @@ def main():
 
     df.dropna(inplace=True)
 
-    logging.info("df.tail(1)['Timestamp']: %s", df.index[-1])
-    logging.info("df[-1] - df[0]: %s", df.index[-1] - df.index[0])
     delta_time = df.index[-1] - df.index[0]
     logging.info("Delta time: %s (%s)", delta_time, type(delta_time))
 
@@ -159,7 +157,7 @@ def main():
     logging.info("Sleep delay: %s", delay)
 
     if delay.total_seconds() < 0:
-        mins = delay.total_seconds() / 60
+        mins = delay.total_seconds() / 6
         logging.info("Stripping first %d entries", int(np.abs(mins)))
         df = df.tail(-int(np.abs(mins)))
     else:
@@ -171,14 +169,29 @@ def main():
         time.sleep(delay.total_seconds())
 
     for idx, row in df.iterrows():
-        msg_info = CLIENT.publish(TOPIC, row.to_json(), qos=1)
-        unacked_publish.add(msg_info.mid)
+        while pd.Timestamp.now().second % 10 != 0:
+            time.sleep(0.5)
+
+        msg1_info = CLIENT.publish(TOPIC + "/status", "on", qos=1)
+        unacked_publish.add(msg1_info.mid)
+
+        msg2_info = CLIENT.publish(TOPIC + "/setting", row.to_json(), qos=1)
+        unacked_publish.add(msg2_info.mid)
 
         while len(unacked_publish):
             time.sleep(0.1)
 
-        msg_info.wait_for_publish()
-        time.sleep(60)
+        msg1_info.wait_for_publish()
+        msg2_info.wait_for_publish()
+        time.sleep(1)
+
+    msg_info = CLIENT.publish(TOPIC + "/status", "off", qos=1)
+    unacked_publish.add(msg_info.mid)
+
+    while len(unacked_publish):
+        time.sleep(0.1)
+
+    msg_info.wait_for_publish()
 
 
 if __name__ == "__main__":
