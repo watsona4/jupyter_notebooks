@@ -145,7 +145,7 @@ def main():
     df.dropna(inplace=True)
 
     delta_time = df.index[-1] - df.index[0]
-    logging.info("Delta time: %s (%s)", delta_time, type(delta_time))
+    logging.info("Length of fake day: %s", delta_time)
 
     start_time = sunset - delta_time
     logging.info("Start time: %s", start_time)
@@ -157,7 +157,7 @@ def main():
     logging.info("Sleep delay: %s", delay)
 
     if delay.total_seconds() < 0:
-        mins = delay.total_seconds() / 6
+        mins = delay.total_seconds() / 10
         logging.info("Stripping first %d entries", int(np.abs(mins)))
         df = df.tail(-int(np.abs(mins)))
     else:
@@ -178,6 +178,8 @@ def main():
         msg2_info = CLIENT.publish(TOPIC + "/setting", row.to_json(), qos=1)
         unacked_publish.add(msg2_info.mid)
 
+        logging.info(row.to_json())
+        
         while len(unacked_publish):
             time.sleep(0.1)
 
@@ -195,10 +197,10 @@ def main():
 
 
 if __name__ == "__main__":
-    old_day = pd.Timestamp(pd.Timestamp.today().date() - pd.Timedelta(days=1))
+    old_day = pd.Timestamp.today().date() - pd.Timedelta(days=1)
     while True:
         logging.info("    old_day: %s", old_day)
-        today = pd.Timestamp.today()
+        today = pd.Timestamp.today().date()
         logging.info("    today: %s", today)
         logging.info("        today - old_day = %s", today - old_day)
         if today - old_day >= pd.Timedelta(days=1):
