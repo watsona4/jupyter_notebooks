@@ -134,6 +134,7 @@ def main():
 
     df = pd.DataFrame(
         {
+            "Fake Time": times,
             "Red": spec[:, 0],
             "Green": spec[:, 1],
             "Blue": spec[:, 2],
@@ -179,7 +180,7 @@ def main():
         unacked_publish.add(msg2_info.mid)
 
         logging.info(row.to_json())
-        
+
         while len(unacked_publish):
             time.sleep(0.1)
 
